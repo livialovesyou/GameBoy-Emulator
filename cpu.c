@@ -121,6 +121,60 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             bus_write_byte(BUS, cpu_get_HL(cpu), value);
             break;
 
+        case 0x46: //LD B, (HL) // Loads byte at address HL into B
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+            cpu->b = value;
+            break;
+
+        case 0x4E: //LD C, (HL) // Loads byte at address HL into C
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+            cpu->c = value;
+            break;
+
+        case 0x56: //LD D, (HL) // Loads byte at address HL into D
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+            cpu->d = value;
+            break;
+
+        case 0x5E: //LD E, (HL) // Loads byte at address HL into E
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+            cpu->e = value;
+            break;
+
+        case 0x66: //LD H, (HL) // Loads byte at address HL into H
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+            cpu->h = value;
+            break;
+
+        case 0x6E: //LD L, (HL) // Loads byte at address HL into L
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+            cpu->l = value;
+            break;
+
+        case 0x70: //LD (HL), B // Writes B into byte at address HL
+            bus_write_byte(BUS, cpu_get_HL(cpu), cpu->b);
+            break;
+
+        case 0x71: //LD (HL), C // Writes C into byte at address HL
+            bus_write_byte(BUS, cpu_get_HL(cpu), cpu->c);
+            break;
+
+        case 0x72: //LD (HL), D // Writes D into byte at address HL
+            bus_write_byte(BUS, cpu_get_HL(cpu), cpu->d);
+            break;
+
+        case 0x73: //LD (HL), E // Writes E into byte at address HL
+            bus_write_byte(BUS, cpu_get_HL(cpu), cpu->e);
+            break;
+
+        case 0x74: //LD (HL), H // Writes H into byte at address HL
+            bus_write_byte(BUS, cpu_get_HL(cpu), cpu->h);
+            break;
+
+        case 0x75: //LD (HL), L // Writes L into byte at address HL
+            bus_write_byte(BUS, cpu_get_HL(cpu), cpu->l);
+            break;
+
         default:
             break;
     }

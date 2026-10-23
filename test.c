@@ -280,23 +280,164 @@ void test_cpu_opcodes_3(void) {
         printf("CPU opcodes test LD (HL), A FAIL\n");
     }
 
+    cpu.pc = 0xC000;
+    cpu.h = 0xC0;
+    cpu.l = 0x10;
+    cpu.b = 0x14;
+    bus_write_byte(&BUS, cpu.pc, 0x70);    //LD (HL), B // Writes B into byte at address HL
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS, cpu_get_HL(&cpu)) == 0x14) {
+        printf("CPU opcodes test LD (HL), B passed\n");
+    } else {
+        printf("CPU opcodes test LD (HL), B FAIL\n");
+    }
+
+    cpu.pc = 0xC000;
+    cpu.h = 0xC0;
+    cpu.l = 0x11;
+    cpu.c = 0x15;
+    bus_write_byte(&BUS, cpu.pc, 0x71);    //LD (HL), C // Writes C into byte at address HL
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS, cpu_get_HL(&cpu)) == 0x15) {
+        printf("CPU opcodes test LD (HL), C passed\n");
+    } else {
+        printf("CPU opcodes test LD (HL), C FAIL\n");
+
+    }
+
+    cpu.pc = 0xC000;
+    cpu.h = 0xC0;
+    cpu.l = 0x12;
+    cpu.d = 0x16;
+    bus_write_byte(&BUS, cpu.pc, 0x72);    //LD (HL), D // Writes D into byte at address HL
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS, cpu_get_HL(&cpu)) == 0x16) {
+        printf("CPU opcodes test LD (HL), D passed\n");
+    } else {
+        printf("CPU opcodes test LD (HL), D FAIL\n");
+
+    }
+
+    cpu.pc = 0xC000;
+    cpu.h = 0xC0;
+    cpu.l = 0x13;
+    cpu.e = 0x17;
+    bus_write_byte(&BUS, cpu.pc, 0x73);    //LD (HL), E // Writes E into byte at address HL
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS, cpu_get_HL(&cpu)) == 0x17) {
+        printf("CPU opcodes test LD (HL), E passed\n");
+    } else {
+        printf("CPU opcodes test LD (HL), E FAIL\n");
+
+    }
+
+    cpu.pc = 0xC000;
+    cpu.h = 0xC0;
+    cpu.l = 0x14;
+
+    bus_write_byte(&BUS, cpu.pc, 0x74);    //LD (HL), H // Writes H into byte at address HL
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS, cpu_get_HL(&cpu)) == cpu.h) {
+        printf("CPU opcodes test LD (HL), H passed\n");
+    } else {
+        printf("CPU opcodes test LD (HL), H FAIL\n");
+
+    }
+
+    cpu.pc = 0xC000;
+    cpu.h = 0xC0;
+    cpu.l = 0x15;
+
+    bus_write_byte(&BUS, cpu.pc, 0x75);    //LD (HL), L // Writes L into byte at address HL
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS, cpu_get_HL(&cpu)) == cpu.l) {
+        printf("CPU opcodes test LD (HL), L passed\n");
+    } else {
+        printf("CPU opcodes test LD (HL), L FAIL\n");
+
+    }
 
     cpu.pc = 0xC005;
     cpu.h = 0xC0;
     cpu.l = 0x07;
-
     bus_write_byte(&BUS, 0xC005, 0x36); //LD (HL), d8 // Writes 8bit immediate value at address stored in HL
     bus_write_byte(&BUS, cpu.pc + 1, 0x45);
-
     cpu_step(&cpu, &BUS);
     uint8_t result = bus_read_byte(&BUS, cpu_get_HL(&cpu));
-    printf("result: %02X\n", result);
-    printf("%02X\n", bus_read_byte(&BUS, 0xC000 + 7));
     if (result == 0x45) {
         printf("CPU opcodes test LD (HL), d8 passed\n");
     } else {
         printf("CPU opcodes test LD (HL), D8 FAIL\n");
     }
 
+    cpu.pc = 0xC000;
+    cpu.h = 0xC0;
+    cpu.l = 0x0A;
+    cpu.b = 0;
+    cpu.c = 0;
+    bus_write_byte(&BUS, cpu.pc, 0x46); //LD B, (HL) // Loads byte at address HL into B
+    bus_write_byte(&BUS, 0xC00A, 0x41);
+    bus_write_byte(&BUS, cpu.pc + 1, 0x4E); //LD C, (HL) // Loads byte at address HL into C
+    bus_write_byte(&BUS, cpu.pc + 2, 0x56);////LD D, (HL) // Loads byte at address HL into D
+    bus_write_byte(&BUS, cpu.pc + 3, 0x5E); //LD E, (HL) // Loads byte at address HL into E
+    bus_write_byte(&BUS, cpu.pc + 4, 0x66); //LD H, (HL) // Loads byte at address HL into H
+    bus_write_byte(&BUS, cpu.pc + 5, 0x6E); //LD L, (HL) // Loads byte at address HL into L
+    cpu_step(&cpu, &BUS);
+    if (cpu.b == 0x41) {
+        printf("CPU opcodes test LD B, (HL) passed\n");
+    } else {
+        printf("CPU opcodes test LD B, (HL) FAIL\n");
+    }
 
+    cpu.h = 0xC0;
+    cpu.l = 0x0B;
+    bus_write_byte(&BUS, cpu_get_HL(&cpu), 0x42);
+    cpu_step(&cpu, &BUS);
+    if (cpu.c == 0x42) {
+        printf("CPU opcodes test LD C, (HL) passed\n");
+    } else {
+        printf("CPU opcodes test LD C, (HL) FAIL\n");
+    }
+
+    cpu.d = 0;
+    cpu.h = 0xC0;
+    cpu.l = 0x0C;
+    bus_write_byte(&BUS, cpu_get_HL(&cpu), 0x43);
+    cpu_step(&cpu, &BUS);
+    if (cpu.d == 0x43) {
+        printf("CPU opcodes test LD D, (HL) passed\n");
+    } else {
+        printf("CPU opcodes test LD D, (HL) FAIL\n");
+    }
+
+    cpu.e = 0;
+    cpu.h = 0xC0;
+    cpu.l = 0x0D;
+    bus_write_byte(&BUS, cpu_get_HL(&cpu), 0x44);
+    cpu_step(&cpu, &BUS);
+    if (cpu.e == 0x44) {
+        printf("CPU opcodes test LD E, (HL) passed\n");
+    } else {
+        printf("CPU opcodes test LD E, (HL) FAIL\n");
+    }
+
+    cpu.h = 0xC0;
+    cpu.l = 0x0E;
+    bus_write_byte(&BUS, cpu_get_HL(&cpu), 0x45);
+    cpu_step(&cpu, &BUS);
+    if (cpu.h == 0x45) {
+        printf("CPU opcodes test LD H, (HL) passed\n");
+    } else {
+        printf("CPU opcodes test LD H, (HL) FAIL\n");
+    }
+
+    cpu.h = 0xC0;
+    cpu.l = 0x0F;
+    bus_write_byte(&BUS, cpu_get_HL(&cpu), 0x46);
+    cpu_step(&cpu, &BUS);
+    if (cpu.l == 0x46) {
+        printf("CPU opcodes test LD L, (HL) passed\n");
+    } else {
+        printf("CPU opcodes test LD L, (HL) FAIL\n");
+    }
 }
