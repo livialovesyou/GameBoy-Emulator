@@ -83,9 +83,44 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         case 0x6F:  //LD L, A // Loads A into L
             cpu->l = cpu->a;
             break;
+
         case 0x78: //LD A, B // Loads B into A
             cpu->a = cpu->b;
             break;
+
+        case 0x79: //LD A, C // Loads C into A
+            cpu->a = cpu->c;
+            break;
+
+        case 0x7A: //LD A, D // Loads D into A
+            cpu->a = cpu->d;
+            break;
+
+        case 0x7B: //LD A, E // Loads E into A
+            cpu->a = cpu->e;
+            break;
+
+        case 0x7C: //LD A, H // Loads H into A
+            cpu->a = cpu->h;
+            break;
+
+        case 0x7D: //LD A, L // Loads L into A
+            cpu->a = cpu->l;
+            break;
+
+        case 0x7E: //LD A, (HL) // Loads byte at address HL into A
+            cpu->a = bus_read_byte(BUS, cpu_get_HL(cpu));
+            break;
+
+        case 0x77: //LD (HL), A // Writes A into byte at address stored in HL
+            bus_write_byte(BUS, cpu_get_HL(cpu), cpu->a);
+            break;
+
+        case 0x36: //LD (HL), d8 // Writes 8bit immediate value at address stored in HL
+            value = cpu_fetch_byte(cpu, BUS);
+            bus_write_byte(BUS, cpu_get_HL(cpu), value);
+            break;
+
         default:
             break;
     }

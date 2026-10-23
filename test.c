@@ -157,32 +157,146 @@ void test_cpu_opcodes_2(void) {
     bus_write_byte(&BUS, cpu.pc + 4, 0x67); //LD H, A
     bus_write_byte(&BUS, cpu.pc + 5, 0x6F); //LD L, A
     bus_write_byte(&BUS, cpu.pc + 6, 0x78); //LD A, B
+    bus_write_byte(&BUS, cpu.pc + 7, 0x79); //LD A, C
+    bus_write_byte(&BUS, cpu.pc + 8, 0x7A); //LD A, D
+    bus_write_byte(&BUS, cpu.pc + 9, 0x7B); //LD A, E
+    bus_write_byte(&BUS, cpu.pc + 10,0x7C); //LD A, H
+    bus_write_byte(&BUS, cpu.pc + 11,0x7D); //LD A, L
     cpu_step(&cpu, &BUS);
     if (cpu.b == 0x12) {
         printf("CPU opcodes test LD B,A passed\n");
+    } else {
+        printf("CPU opcodes test LD B,A FAIL\n");
     }
+
     cpu_step(&cpu, &BUS);
     if (cpu.c == 0x12) {
         printf("CPU opcodes test LD C,A passed\n");
+    }   else {
+        printf("CPU opcodes test LD C,A FAIL\n");
     }
+
     cpu_step(&cpu, &BUS);
     if (cpu.d == 0x12) {
         printf("CPU opcodes test LD D,A passed\n");
+    } else {
+        printf("CPU opcodes test LD D,A FAIL\n");
     }
+
     cpu_step(&cpu, &BUS);
     if (cpu.e == 0x12) {
         printf("CPU opcodes test LD E,A passed\n");
+    }   else {
+        printf("CPU opcodes test LD E,A FAIL\n");
     }
+
     cpu_step(&cpu, &BUS);
     if (cpu.h == 0x12) {
         printf("CPU opcodes test LD H,A passed\n");
+    } else {
+        printf("CPU opcodes test LD H FAIL\n");
     }
+
     cpu_step(&cpu, &BUS);
     if (cpu.l == 0x12) {
         printf("CPU opcodes test LD L,A passed\n");
+    } else {
+        printf("CPU opcodes test LD L,A FAIL\n");
     }
+
     cpu.a = 0;
-    if (cpu.b == 0x12) {
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x12) {
         printf("CPU opcodes test LD A,B passed\n");
+    } else {
+        printf("CPU opcodes test LD A,B FAIL\n");
     }
+
+    cpu.a = 0;
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x12) {
+        printf("CPU opcodes test LD A,C passed\n");
+    } else {
+        printf("CPU opcodes test LD A,C FAIL\n");
+    }
+
+    cpu.a = 0;
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x12) {
+        printf("CPU opcodes test LD A,D passed\n");
+    } else {
+        printf("CPU opcodes test LD A,D FAIL\n");
+    }
+
+    cpu.a = 0;
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x12) {
+        printf("CPU opcodes test LD A,E passed\n");
+    } else {
+        printf("CPU opcodes test LD A,E FAIL\n");
+    }
+
+    cpu.a = 0;
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x12) {
+        printf("CPU opcodes test LD A,H passed\n");
+    } else {
+        printf("CPU opcodes test LD A,H FAIL\n");
+    }
+
+    cpu.a = 0;
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x12) {
+        printf("CPU opcodes test LD A,L passed\n");
+    } else {
+        printf("CPU opcodes test LD A,L FAIL\n");
+    }
+}
+
+void test_cpu_opcodes_3(void) {
+    BUS BUS = {0};
+    CPU cpu = {0};
+    cpu.pc = 0xC000;
+    cpu.h = 0xC0;
+    cpu.l = 0x02;
+
+
+    bus_write_byte(&BUS, cpu.pc, 0x7E);             //LD A, (HL) // Loads byte at address HL into A
+    bus_write_byte(&BUS, cpu.pc + 1, 0x77); //LD (HL), A // Writes A into byte at address stored in HL
+    bus_write_byte(&BUS, cpu.pc + 2, 0x42);
+
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x42) {
+        printf("CPU opcodes test LD A, (HL) passed\n");
+    } else {
+        printf("CPU opcodes test LD A, (HL) FAIL\n");
+    }
+
+    cpu.a = 0x43;
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x43) {
+        printf("CPU opcodes test LD (HL), A passed\n");
+    } else {
+        printf("CPU opcodes test LD (HL), A FAIL\n");
+    }
+
+
+    cpu.pc = 0xC005;
+    cpu.h = 0xC0;
+    cpu.l = 0x07;
+
+    bus_write_byte(&BUS, 0xC005, 0x36); //LD (HL), d8 // Writes 8bit immediate value at address stored in HL
+    bus_write_byte(&BUS, cpu.pc + 1, 0x45);
+
+    cpu_step(&cpu, &BUS);
+    uint8_t result = bus_read_byte(&BUS, cpu_get_HL(&cpu));
+    printf("result: %02X\n", result);
+    printf("%02X\n", bus_read_byte(&BUS, 0xC000 + 7));
+    if (result == 0x45) {
+        printf("CPU opcodes test LD (HL), d8 passed\n");
+    } else {
+        printf("CPU opcodes test LD (HL), D8 FAIL\n");
+    }
+
+
 }
