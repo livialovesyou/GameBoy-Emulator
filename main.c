@@ -14,6 +14,8 @@ int main(void) {
     test_cpu_opcodes_1();
     test_cpu_opcodes_2();
     test_cpu_opcodes_3();
+    test_cpu_opcodes_4();
+    test_cpu_opcodes_5();
     //test_cpu_flags_1();
     //test_cpu_registers_1();
     //echo_ram_test_1();

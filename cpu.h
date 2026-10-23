@@ -21,7 +21,8 @@ typedef struct {
         uint8_t h;      //General-purpose storage
         uint8_t l;      //General-purpose storage
 
-        uint16_t pc;
+        uint16_t sp;    //Stack Pointer
+        uint16_t pc;    //Program Counter
 } CPU;
 
 //Read/Write BC
