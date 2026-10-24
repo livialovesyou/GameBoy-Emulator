@@ -638,4 +638,480 @@ void test_cpu_opcodes_5(void) {
         }   else {
             printf("CPU Opcodes test AND A,C FAIL\n");
         }
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.b = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xB0); // OR A, B //Bitwise OR between A and B, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x3F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test OR A,B passed\n");
+    } else {
+        printf("CPU Opcodes test OR A,B FAIL\n");
+    }
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.c = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xB1); // OR A, C //Bitwise OR between A and C, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x3F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test OR A,C passed\n");
+        } else {
+            printf("CPU Opcodes test OR A,C FAIL\n");
+        }
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.b = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xA8); // XOR A, B //Bitwise XOR between A and B, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x31 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test XOR A,B passed\n");
+        } else {
+            printf("CPU Opcodes test XOR A,B FAIL\n");
+        }
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.c = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xA9); // XOR A, C //Bitwise XOR between A and C, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x31 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test XOR A,C passed\n");
+        } else {
+            printf("CPU Opcodes test XOR A,C FAIL\n");
+        }
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x25;
+    cpu.b = 0x10;
+    bus_write_byte(&BUS, cpu.pc, 0xB8); // CP A, B //Compare A and B, record flags
+    cpu_step(&cpu, &BUS);
+    if (
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test CP A,B passed\n");
+        } else {
+            printf("CPU Opcodes test CP A,B FAIL\n");
+        }
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x25;
+    cpu.c = 0x10;
+    bus_write_byte(&BUS, cpu.pc, 0xB9); // CP A, C //Compare A and C, record flags
+    cpu_step(&cpu, &BUS);
+    if (
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test CP A,C passed\n");
+        } else {
+            printf("CPU Opcodes test CP A,C FAIL\n");
+        }
+}
+
+void test_cpu_opcodes_6(void) {
+
+    BUS BUS = {0};
+    CPU cpu = {0};
+
+    cpu.pc = 0xC000;
+    bus_write_byte(&BUS, cpu.pc, 0xC3);//JP, d16 // Unconditional jump to immediate 16bit address
+    bus_write_byte(&BUS, cpu.pc + 1, 0x10);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC0);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0xC010) {
+        printf("CPU Opcodes test JP, d16 passed\n");
+    } else {
+        printf("CPU Opcodes test JP, d16 FAIL\n");
+    }
+
+    cpu.pc = 0xC000;
+    cpu_set_flag(&cpu, FLAG_Z, 1);
+    bus_write_byte(&BUS, cpu.pc, 0xC2);//JP NZ, d16 // Conditional jump to immediate 16bit address if ZERO Flag is cleared
+    bus_write_byte(&BUS, cpu.pc + 1, 0x10);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC0);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0xC003) {
+        printf("CPU Opcodes test JP NZ, d16 passed\n");
+    } else {
+        printf("CPU Opcodes test JP NZ, d16 FAIL\n");
+    }
+//printf("Zero FLag: %u\n", cpu_flag_is_set(&cpu, FLAG_Z));
+    //printf("COUNTER: %04X\n", cpu.pc);
+
+
+
+    cpu.pc = 0xC000;
+    cpu_set_flag(&cpu, FLAG_Z, 1);
+    bus_write_byte(&BUS, cpu.pc, 0xCA);//JP Z, d16 // Conditional jump to immediate 16bit address if ZERO Flag is set
+    bus_write_byte(&BUS, cpu.pc + 1, 0x10);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC0);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0xC010) {
+        printf("CPU Opcodes test JP Z, d16 passed\n");
+    } else {
+        printf("CPU Opcodes test JP Z, d16 FAIL\n");
+    }
+    //printf("Zero FLag: %u\n", cpu_flag_is_set(&cpu, FLAG_Z));
+    //printf("COUNTER: %04X", cpu.pc);
+
+
+    cpu.pc = 0xC000;
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    bus_write_byte(&BUS, cpu.pc, 0xD2);//JP NC, d16 // Conditional jump to immediate 16bit address if CARRY Flag is cleared
+    bus_write_byte(&BUS, cpu.pc + 1, 0x10);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC0);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0xC003) {
+        printf("CPU Opcodes test JP NC, d16 passed\n");
+    } else {
+        printf("CPU Opcodes test JP NC, d16 FAIL\n");
+    }
+    //printf("Zero FLag: %u\n", cpu_flag_is_set(&cpu, FLAG_Z));
+    //printf("COUNTER: %04X\n", cpu.pc);
+
+    cpu.pc = 0xC000;
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    bus_write_byte(&BUS, cpu.pc, 0xDA);//JP C, d16 // Conditional jump to immediate 16bit address if CARRY Flag is set
+    bus_write_byte(&BUS, cpu.pc + 1, 0x10);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC0);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0xC010) {
+        printf("CPU Opcodes test JP C, d16 passed\n");
+    } else {
+        printf("CPU Opcodes test JP C, d16 FAIL\n");
+    }
+
+    cpu.pc = 0xC100;
+    bus_write_byte(&BUS, cpu.pc, 0x18); //JR, d8 // Unconditional jump to signed 8bit offset
+    bus_write_byte(&BUS, cpu.pc + 1, 0xFE);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0xC100) {
+        printf("CPU Opcodes test JR,d8 passed\n");
+    } else {
+        printf("CPU Opcodes test JR,d8 FAIL\n");
+    }
+    //printf("COUNTER: %04X", cpu.pc);
+
+
+    cpu.pc = 0xC100;
+    bus_write_byte(&BUS, cpu.pc, 0x20); //JR NZ,d8 // Conditional relative jump if ZERO FLAG is cleared
+    bus_write_byte(&BUS, cpu.pc + 1, 0x15);
+    cpu_set_flag(&cpu, FLAG_Z, 1);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0xC102) {
+        printf("CPU Opcodes test JR NZ, d8 passed\n");
+    } else {
+        printf("CPU Opcodes test JR NZ, d8 FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    bus_write_byte(&BUS, cpu.pc, 0x28); //JR Z,d8 // Conditional relative jump if ZERO FLAG is set
+    bus_write_byte(&BUS, cpu.pc + 1, 0x15);
+    cpu_set_flag(&cpu, FLAG_Z, 1);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0xC117) {
+        printf("CPU Opcodes test JR Z, d8 passed\n");
+    } else {
+        printf("CPU Opcodes test JR Z, d8 FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    bus_write_byte(&BUS, cpu.pc, 0x30); //JR NC,d8 // Conditional relative jump if CARRY FLAG is cleared
+    bus_write_byte(&BUS, cpu.pc + 1, 0x15);
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0xC102) {
+        printf("CPU Opcodes test JR NC, d8 passed\n");
+    } else {
+        printf("CPU Opcodes test JR NC, d8 FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    bus_write_byte(&BUS, cpu.pc, 0x38); //JR C,d8 // Conditional relative jump if CARRY FLAG is set
+    bus_write_byte(&BUS, cpu.pc + 1, 0x15);
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0xC117) {
+        printf("CPU Opcodes test JR C, d8 passed\n");
+    } else {
+        printf("CPU Opcodes test JR C, d8 FAIL\n");
+    }
+
+}
+
+void test_cpu_opcodes_7(void) {
+    BUS BUS = {0};
+    CPU cpu = {0};
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+
+    bus_write_byte(&BUS, cpu.pc, 0xCD); //CALL d16 // Calls subroutine, CPU saves return address to stack pointer, then jumps to target address
+    bus_write_byte(&BUS, cpu.pc + 1, 0x50);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC1);
+    bus_write_byte(&BUS, 0xC150, 0xC9);//RET //Returns from subroutine by reading the saved return address from the stack and loading it into the program counter
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC150 && cpu.sp == 0xCFFE) {
+        printf("CPU Opcodes test CALL d16 passed\n");
+    } else {
+        printf("CPU Opcodes test CALL d16 FAIL\n");
+    }
+
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC103 && cpu.sp == 0xD000) {
+        printf("CPU Opcodes test RET passed\n");
+    } else {
+        printf("CPU Opcodes test RET FAIL\n");
+    }
+    cpu.pc = 0xC100;
+    bus_write_byte(&BUS, cpu.pc, 0xC4); //CALL NZ d16 // Calls subroutine if not Zero, CPU saves return address to stack pointer, then jumps to target address
+    bus_write_byte(&BUS, cpu.pc + 1, 0x50);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC1);
+    bus_write_byte(&BUS, 0xC150, 0xC0); //RET NZ
+    cpu_set_flag(&cpu, FLAG_Z, 0);
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC150 && cpu.sp == 0xCFFE) {
+        printf("CPU Opcodes test CALL NZ d16 passed\n");
+    } else {
+        printf("CPU Opcodes test CALL NZ d16 FAIL\n");
+    }
+    cpu_set_flag(&cpu, FLAG_Z, 0);
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC103 && cpu.sp == 0xD000) {
+        printf("CPU Opcodes test RET NZ passed\n");
+    } else {
+        printf("CPU Opcodes test RET NZ FAIL\n");
+    }
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    bus_write_byte(&BUS, cpu.pc, 0xCC); //CALL Z d16 // Calls subroutine if Zero, CPU saves return address to stack pointer, then jumps to target address
+    bus_write_byte(&BUS, cpu.pc + 1, 0x50);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC1);
+    bus_write_byte(&BUS, 0xC150, 0xC8); //RET Z
+    cpu_set_flag(&cpu, FLAG_Z, 1);
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC150 && cpu.sp == 0xCFFE) {
+        printf("CPU Opcodes test CALL Z d16 passed\n");
+    } else {
+        printf("CPU Opcodes test CALL Z d16 FAIL\n");
+    }
+    cpu_set_flag(&cpu, FLAG_Z, 1);
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC103 && cpu.sp == 0xD000) {
+        printf("CPU Opcodes test RET Z passed\n");
+    } else {
+        printf("CPU Opcodes test RET Z FAIL\n");
+    }
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    bus_write_byte(&BUS, cpu.pc, 0xD4); //CALL NC d16 // Calls subroutine if not CARRY, CPU saves return address to stack pointer, then jumps to target address
+    bus_write_byte(&BUS, cpu.pc + 1, 0x50);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC1);
+    bus_write_byte(&BUS, 0xC150, 0xD0); //RET NC
+    cpu_set_flag(&cpu, FLAG_C, 0);
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC150 && cpu.sp == 0xCFFE) {
+        printf("CPU Opcodes test CALL NC d16 passed\n");
+    } else {
+        printf("CPU Opcodes test CALL NC d16 FAIL\n");
+    }
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC103 && cpu.sp == 0xD000) {
+        printf("CPU Opcodes test RET NC passed\n");
+    } else {
+        printf("CPU Opcodes test RET NC FAIL\n");
+    }
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    bus_write_byte(&BUS, cpu.pc, 0xDC); //CALL C d16 // Calls subroutine if CARRY, CPU saves return address to stack pointer, then jumps to target address
+    bus_write_byte(&BUS, cpu.pc + 1, 0x50);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC1);
+    bus_write_byte(&BUS, 0xC150, 0xD8); //RET C
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC150 && cpu.sp == 0xCFFE) {
+        printf("CPU Opcodes test CALL C d16 passed\n");
+    } else {
+        printf("CPU Opcodes test CALL C d16 FAIL\n");
+    }
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC103 && cpu.sp == 0xD000) {
+        printf("CPU Opcodes test RET C passed\n");
+    } else {
+        printf("CPU Opcodes test RET C FAIL\n");
+    }
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    cpu.b = 34;
+    cpu.c = 12;
+    bus_write_byte(&BUS, cpu.pc, 0xC5); // PUSH BC // Writes the 16bit value into the stack
+    bus_write_byte(&BUS, cpu.pc + 1, 0xC1);//POP BC
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS, cpu.sp) == 12 && bus_read_byte(&BUS, cpu.sp + 1) == 34) {
+        printf("CPU Opcodes test PUSH BC passed\n");
+    } else {
+        printf("CPU Opcodes test PUSH BC FAIL\n");
+    }
+    cpu.b = 0;
+    cpu.c = 0;
+    cpu_step(&cpu, &BUS);
+    if (cpu.b == 34 && cpu.c == 12) {
+        printf("CPU Opcodes test POP BC passed\n");
+    } else {
+        printf("CPU Opcodes test POP BC FAIL\n");
+    }
+
+
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    cpu.d = 34;
+    cpu.e = 12;
+    bus_write_byte(&BUS, cpu.pc, 0xD5); // PUSH DE // Writes the 16bit value into the stack
+    bus_write_byte(&BUS, cpu.pc + 1, 0xD1);//POP DE
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS, cpu.sp) == 12 && bus_read_byte(&BUS, cpu.sp + 1) == 34) {
+        printf("CPU Opcodes test PUSH DE passed\n");
+    } else {
+        printf("CPU Opcodes test PUSH DE FAIL\n");
+    }
+    cpu.d = 0;
+    cpu.e = 0;
+    cpu_step(&cpu, &BUS);
+    if (cpu.d == 34 && cpu.e == 12) {
+        printf("CPU Opcodes test POP DE passed\n");
+    } else {
+        printf("CPU Opcodes test POP DE FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    cpu.h = 34;
+    cpu.l = 12;
+    bus_write_byte(&BUS, cpu.pc, 0xE5); // PUSH HL // Writes the 16bit value into the stack
+    bus_write_byte(&BUS, cpu.pc + 1, 0xE1);//POP HL
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS, cpu.sp) == 12 && bus_read_byte(&BUS, cpu.sp + 1) == 34) {
+        printf("CPU Opcodes test PUSH HL passed\n");
+    } else {
+        printf("CPU Opcodes test PUSH HL FAIL\n");
+    }
+    cpu.h = 0;
+    cpu.l = 0;
+    cpu_step(&cpu, &BUS);
+    if (cpu.h == 34 && cpu.l == 12) {
+        printf("CPU Opcodes test POP HL passed\n");
+    } else {
+        printf("CPU Opcodes test POP HL FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    cpu.a = 0x34;
+    cpu.f = 0x12;
+    bus_write_byte(&BUS, cpu.pc, 0xF5); // PUSH AF // Writes the 16bit value into the stack
+    bus_write_byte(&BUS, cpu.pc + 1, 0xF1);//POP AF
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS, cpu.sp) == 0x10 && bus_read_byte(&BUS, cpu.sp + 1) == 0x34) {
+        printf("CPU Opcodes test PUSH AF passed\n");
+    } else {
+        printf("CPU Opcodes test PUSH AF FAIL\n");
+    }
+    cpu.a = 0x00;
+    cpu.f = 0x00;
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x34 && cpu.f == 0x10) {
+        printf("CPU Opcodes test POP AF passed\n");
+    } else {
+        printf("CPU Opcodes test POP AF FAIL\n");
+    }
+
+
+    bus_write_byte(&BUS, 0xC100, 0xD9); //RETI // Return to 16bit immediate address and enable master interrupt
+    bus_write_byte(&BUS, 0xCFFE, 0x34);
+    bus_write_byte(&BUS, 0xCFFF, 0x12);
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xCFFE;
+    cpu.ime = 0;
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0x1234 && cpu.ime == 1 && cpu.sp == 0xD000) {
+        printf("CPU Opcodes test RETI passed\n");
+    } else {
+        printf("CPU Opcodes test RETI FAIL\n");
+    }
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    bus_write_byte(&BUS, cpu.pc, 0xC7); //RST 00H
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0x0000 && cpu.sp == 0xCFFE) {
+        printf("CPU Opcodes test RST 00H passed\n");
+    } else {
+        printf("CPU Opcodes test RST 00H FAIL\n");
+    }
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    bus_write_byte(&BUS, cpu.pc, 0xCF); //RST 08H
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0x0008 && cpu.sp == 0xCFFE) {
+        printf("CPU Opcodes test RST 08H passed\n");
+    } else {
+        printf("CPU Opcodes test RST 08H FAIL\n");
+    }
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    bus_write_byte(&BUS, cpu.pc, 0x08);//LD (d16), SP writes to memory the stack pointer
+    bus_write_byte(&BUS, cpu.pc + 1, 0x00);
+    bus_write_byte(&BUS, cpu.pc + 2, 0xC2);
+    cpu_step(&cpu, &BUS);
+    if (bus_read_byte(&BUS,0xC200) == 0x00 && bus_read_byte(&BUS,0xC201) == 0xD0) {
+        printf("CPU Opcodes test LD (d16), SP passed\n");
+    } else {
+        printf("CPU Opcodes test LD (d16), SP FAIL\n");
+    }
+    
 }

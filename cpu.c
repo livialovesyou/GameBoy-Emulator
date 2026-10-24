@@ -309,6 +309,462 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_C, 0);
             break;
 
+        case 0xB0: // OR A, B //Bitwise OR between A and B, stores in A, record flags
+            a = cpu->a;
+            b = cpu->b;
+            result = a | b;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+
+        case 0xB1: // OR A, C //Bitwise OR between A and C, stores in A, record flags
+            a = cpu->a;
+            c = cpu->c;
+            result = a | c;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+
+        case 0xA8: // XOR A, B //Bitwise XOR between A and B, stores in A, record flags
+            a = cpu->a;
+            b = cpu->b;
+            result = a ^ b;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+
+        case 0xA9: // XOR A, C //Bitwise XOR between A and C, stores in A, record flags
+            a = cpu->a;
+            c = cpu->c;
+            result = a ^ c;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+
+        case 0xB8: //CP A,B // Compare A and B, record flags
+            a = cpu->a;
+            b = cpu->b;
+
+            cpu_set_flag(cpu, FLAG_Z, a == b);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (a & 0x0F) < (b & 0x0F));
+            cpu_set_flag(cpu, FLAG_C, a < b);
+            break;
+
+        case 0xB9: //CP A,B // Compare A and B, record flags
+            a = cpu->a;
+            c = cpu->c;
+
+            cpu_set_flag(cpu, FLAG_Z, a == c);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (a & 0x0F) < (c & 0x0F));
+            cpu_set_flag(cpu, FLAG_C, a < c);
+            break;
+
+        case 0xC3: //JP, d16 // Unconditional jump to immediate 16bit address
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            value_16 = (uint16_t)high << 8 | low;
+            cpu->pc = value_16;
+            break;
+
+        case 0xC2: //JP NZ, d16 // Conditional jump to immediate 16bit address if ZERO Flag is cleared
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            if (cpu_flag_is_set(cpu, FLAG_Z) == 0) {
+
+                value_16 = (uint16_t)high << 8 | low;
+                cpu->pc = value_16;
+                break;
+            } else {
+                break;
+            }
+
+        case 0xCA: //JP Z, d16 // Conditional jump to immediate 16bit address if ZERO Flag is set
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            if (cpu_flag_is_set(cpu, FLAG_Z) == 1) {
+
+                value_16 = (uint16_t)high << 8 | low;
+                cpu->pc = value_16;
+                break;
+            } else {
+                break;
+            }
+
+        case 0xD2: //JP NC, d16 // Conditional jump to immediate 16bit address if CARRY Flag is cleared
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            if (cpu_flag_is_set(cpu, FLAG_C) == 0) {
+
+                value_16 = (uint16_t)high << 8 | low;
+                cpu->pc = value_16;
+                break;
+            } else {
+                break;
+            }
+
+        case 0xDA: //JP C, d16 // Conditional jump to immediate 16bit address if CARRY Flag is set
+            if (cpu_flag_is_set(cpu, FLAG_C) == 1) {
+                low = cpu_fetch_byte(cpu, BUS);
+                high = cpu_fetch_byte(cpu, BUS);
+                value_16 = (uint16_t)high << 8 | low;
+                cpu->pc = value_16;
+                break;
+            } else {
+                break;
+            }
+
+        case 0x18: //JR, d8 // Unconditional jump to 8bit offset
+            int8_t offset = (int8_t)cpu_fetch_byte(cpu, BUS);
+            cpu->pc = (uint16_t)(cpu->pc + offset);
+            break;
+
+        case 0x20: //JR NZ,d8 // Conditional relative jump if ZERO FLAG is cleared
+            offset = (int8_t)cpu_fetch_byte(cpu, BUS);
+            if (cpu_flag_is_set(cpu, FLAG_Z) == 0) {
+
+                cpu->pc = (uint16_t)(cpu->pc + offset);
+            }
+            break;
+
+        case 0x28: //JR Z,d8 // Conditional relative jump if ZERO FLAG is set
+            offset = (int8_t)cpu_fetch_byte(cpu, BUS);
+            if (cpu_flag_is_set(cpu, FLAG_Z) == 1) {
+
+                cpu->pc = (uint16_t)(cpu->pc + offset);
+            }
+            break;
+
+        case 0x30: //JR NC,d8 // Conditional relative jump if CARRY FLAG is cleared
+            offset = (int8_t)cpu_fetch_byte(cpu, BUS);
+            if (cpu_flag_is_set(cpu, FLAG_C) == 0) {
+
+                cpu->pc = (uint16_t)(cpu->pc + offset);
+            }
+            break;
+
+        case 0x38: //JR C,d8 // Conditional relative jump if CARRY FLAG is set
+            offset = (int8_t)cpu_fetch_byte(cpu, BUS);
+            if (cpu_flag_is_set(cpu, FLAG_C) == 1) {
+
+                cpu->pc = (uint16_t)(cpu->pc + offset);
+            }
+            break;
+
+        case 0xCD: //CALL d16 // Calls subroutine, CPU saves return address to stack pointer, then jumps to target address
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            value_16 = (uint16_t)high << 8 | low;
+            uint16_t return_address = cpu->pc;
+
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+            cpu->pc = value_16;
+            break;
+
+        case 0xC9: //RET //Returns from subroutine by reading the saved return address from the stack and loading it into the program counter
+            low = bus_read_byte(BUS, cpu->sp);
+            cpu->sp++;
+            high = bus_read_byte(BUS, cpu->sp);
+            cpu->sp++;
+            value_16 = (uint16_t)high << 8 | low;
+            cpu->pc = value_16;
+            break;
+
+        case 0xC4: // //CALL NZ d16 // Calls subroutine when ZERO FLAG is cleared, CPU saves return address to stack pointer, then jumps to target address
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            value_16 = (uint16_t)high << 8 | low;
+
+            if (cpu_flag_is_set(cpu, FLAG_Z) == 0) {
+                return_address = cpu->pc;
+
+                cpu->sp--;
+                bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+                cpu->sp--;
+                bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+                cpu->pc = value_16;
+            }
+            break;
+
+        case 0xCC: // //CALL Z d16 // Calls subroutine when ZERO FLAG is set, CPU saves return address to stack pointer, then jumps to target address
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            value_16 = (uint16_t)high << 8 | low;
+
+            if (cpu_flag_is_set(cpu, FLAG_Z) == 1) {
+                return_address = cpu->pc;
+
+                cpu->sp--;
+                bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+                cpu->sp--;
+                bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+                cpu->pc = value_16;
+            }
+            break;
+
+        case 0xD4: // //CALL NC d16 // Calls subroutine when CARRY FLAG is cleared, CPU saves return address to stack pointer, then jumps to target address
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            value_16 = (uint16_t)high << 8 | low;
+
+            if (cpu_flag_is_set(cpu, FLAG_C) == 0) {
+                return_address = cpu->pc;
+
+                cpu->sp--;
+                bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+                cpu->sp--;
+                bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+                cpu->pc = value_16;
+            }
+            break;
+
+        case 0xDC: // //CALL C d16 // Calls subroutine when CARRY FLAG is set, CPU saves return address to stack pointer, then jumps to target address
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            value_16 = (uint16_t)high << 8 | low;
+
+            if (cpu_flag_is_set(cpu, FLAG_C) == 1) {
+                return_address = cpu->pc;
+
+                cpu->sp--;
+                bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+                cpu->sp--;
+                bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+                cpu->pc = value_16;
+            }
+            break;
+
+        case 0xC5:// PUSH BC // Writes the 16bit value into the stack
+            value_16 = cpu_get_BC(cpu);
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 & 0xFF));
+            break;
+
+        case 0xD5:// PUSH DE // Writes the 16bit value into the stack
+            value_16 = cpu_get_DE(cpu);
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 & 0xFF));
+            break;
+
+        case 0xE5:// PUSH HL // Writes the 16bit value into the stack
+            value_16 = cpu_get_HL(cpu);
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 & 0xFF));
+            break;
+
+        case 0xF5:// PUSH AF // Writes the 16bit value into the stack
+            value_16 = cpu_get_AF(cpu);
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 & 0xFF));
+            break;
+
+        case 0xC1: //POP BC // Reverses push, restores value from the stack
+            low = bus_read_byte(BUS,cpu->sp);
+            cpu->sp++;
+            high = bus_read_byte(BUS,cpu->sp);
+            cpu->sp++;
+            value_16 = (uint16_t)high << 8 | low;
+            cpu_set_BC(cpu,value_16);
+            break;
+
+        case 0xD1: //POP DE // Reverses push, restores value from the stack
+            low = bus_read_byte(BUS,cpu->sp);
+            cpu->sp++;
+            high = bus_read_byte(BUS,cpu->sp);
+            cpu->sp++;
+            value_16 = (uint16_t)high << 8 | low;
+            cpu_set_DE(cpu,value_16);
+            break;
+
+        case 0xE1: //POP HL // Reverses push, restores value from the stack
+            low = bus_read_byte(BUS,cpu->sp);
+            cpu->sp++;
+            high = bus_read_byte(BUS,cpu->sp);
+            cpu->sp++;
+            value_16 = (uint16_t)high << 8 | low;
+            cpu_set_HL(cpu,value_16);
+            break;
+
+        case 0xF1: //POP AF // Reverses push, restores value from the stack
+            low = bus_read_byte(BUS,cpu->sp);
+            cpu->sp++;
+            high = bus_read_byte(BUS,cpu->sp);
+            cpu->sp++;
+            value_16 = (uint16_t)high << 8 | low;
+            cpu_set_AF(cpu,value_16);
+            break;
+
+        case 0xC0: //RET NZ //Return only if ZERO FLAG is cleared
+            if (cpu_flag_is_set(cpu,FLAG_Z) == 0) {
+                low = bus_read_byte(BUS, cpu->sp);
+                cpu->sp++;
+                high = bus_read_byte(BUS, cpu->sp);
+                cpu->sp++;
+                value_16 = (uint16_t)high << 8 | low;
+                cpu->pc = value_16;
+            }
+            break;
+
+        case 0xC8: //RET Z //Return only if ZERO FLAG is set
+            if (cpu_flag_is_set(cpu,FLAG_Z) == 1) {
+                low = bus_read_byte(BUS, cpu->sp);
+                cpu->sp++;
+                high = bus_read_byte(BUS, cpu->sp);
+                cpu->sp++;
+                value_16 = (uint16_t)high << 8 | low;
+                cpu->pc = value_16;
+            }
+            break;
+
+        case 0xD0: //RET NC //Return only if CARRY FLAG is cleared
+            if (cpu_flag_is_set(cpu,FLAG_C) == 0) {
+                low = bus_read_byte(BUS, cpu->sp);
+                cpu->sp++;
+                high = bus_read_byte(BUS, cpu->sp);
+                cpu->sp++;
+                value_16 = (uint16_t)high << 8 | low;
+                cpu->pc = value_16;
+            }
+            break;
+
+        case 0xD8: //RET C //Return only if ZERO FLAG is set
+            if (cpu_flag_is_set(cpu,FLAG_C) == 1) {
+                low = bus_read_byte(BUS, cpu->sp);
+                cpu->sp++;
+                high = bus_read_byte(BUS, cpu->sp);
+                cpu->sp++;
+                value_16 = (uint16_t)high << 8 | low;
+                cpu->pc = value_16;
+            }
+            break;
+
+        case 0xD9: //RETI //Return from an interrupt handler and re enable interrupts
+            low = bus_read_byte(BUS, cpu->sp);
+            cpu->sp++;
+            high = bus_read_byte(BUS, cpu->sp);
+            cpu->sp++;
+            value_16 = (uint16_t)high << 8 | low;
+            cpu->pc = value_16;
+            cpu->ime = 1;
+            break;
+
+        case 0xC7: //RST 00H // Jumps to 0x0000 and pushes the return address to the stack
+            return_address = cpu->pc;
+
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+            cpu->pc = 0x0000;
+            break;
+
+        case 0xCF: //RST 08H // Jumps to 0x0008 and pushes the return address to the stack
+            return_address = cpu->pc;
+
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+            cpu->pc = 0x0008;
+            break;
+
+        case 0xD7: //RST 10H // Jumps to 0x0010 and pushes the return address to the stack
+            return_address = cpu->pc;
+
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+            cpu->pc = 0x0010;
+            break;
+
+        case 0xDF: //RST 18H // Jumps to 0x0018 and pushes the return address to the stack
+            return_address = cpu->pc;
+
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+            cpu->pc = 0x0018;
+            break;
+
+        case 0xE7: //RST 20H // Jumps to 0x0020 and pushes the return address to the stack
+            return_address = cpu->pc;
+
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+            cpu->pc = 0x0020;
+            break;
+
+        case 0xEF: //RST 28H // Jumps to 0x0028 and pushes the return address to the stack
+            return_address = cpu->pc;
+
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+            cpu->pc = 0x0028;
+            break;
+
+        case 0xF7: //RST 30H // Jumps to 0x0030 and pushes the return address to the stack
+            return_address = cpu->pc;
+
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+            cpu->pc = 0x0030;
+            break;
+
+        case 0xFF: //RST 38H // Jumps to 0x0030 and pushes the return address to the stack
+            return_address = cpu->pc;
+
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address >> 8));
+            cpu->sp--;
+            bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
+            cpu->pc = 0x0038;
+            break;
+
+        case 0x08: //LD (d16), SP writes to memory the stack pointer
+            low = cpu_fetch_byte(cpu,BUS);
+            high = cpu_fetch_byte(cpu,BUS);
+            value_16 = ((uint16_t)high << 8) | low;
+            uint16_t sp = cpu->sp;
+            bus_write_byte(BUS,value_16, (uint8_t)(sp & 0xFF));
+            bus_write_byte(BUS,value_16 + 1, (uint8_t)(sp >> 8));
+            break;
+
 
         default:
             break;

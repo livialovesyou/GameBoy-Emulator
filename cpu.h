@@ -23,6 +23,8 @@ typedef struct {
 
         uint16_t sp;    //Stack Pointer
         uint16_t pc;    //Program Counter
+        uint8_t ime;    //Interrupt Master Enable
+        uint64_t cycles;
 } CPU;
 
 //Read/Write BC

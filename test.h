@@ -17,3 +17,5 @@ void test_cpu_opcodes_2(void);
 void test_cpu_opcodes_3(void);
 void test_cpu_opcodes_4(void);
 void test_cpu_opcodes_5(void);
+void test_cpu_opcodes_6(void);
+void test_cpu_opcodes_7(void);
