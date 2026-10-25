@@ -5,11 +5,13 @@
 #pragma once
 
 #define WRAM_SIZE 8192
+#define HRAM_SIZE 127
 #include <stdint.h>
 
 typedef struct BUS {
 
     uint8_t wram[WRAM_SIZE];
+    uint8_t hram[HRAM_SIZE];
 } BUS;
 
 uint8_t bus_read_byte(BUS *BUS, uint16_t address);

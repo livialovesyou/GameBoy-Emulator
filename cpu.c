@@ -765,6 +765,401 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             bus_write_byte(BUS,value_16 + 1, (uint8_t)(sp >> 8));
             break;
 
+        case 0x03: //INC BC, Increment BC
+            value_16 = cpu_get_BC(cpu);
+            value_16++;
+            cpu_set_BC(cpu,value_16);
+            break;
+
+        case 0x13: //INC DE, Increment DE
+            value_16 = cpu_get_DE(cpu);
+            value_16++;
+            cpu_set_DE(cpu,value_16);
+            break;
+
+        case 0x23: //INC HL, Increment HL
+            value_16 = cpu_get_HL(cpu);
+            value_16++;
+            cpu_set_HL(cpu,value_16);
+            break;
+
+        case 0x33: //INC SP, Increment Stack Pointer
+            value_16 = cpu->sp;
+            value_16++;
+            cpu->sp = value_16;
+            break;
+
+        case 0x0B: //DEC BC, Decrement BC
+            value_16 = cpu_get_BC(cpu);
+            value_16--;
+            cpu_set_BC(cpu,value_16);
+            break;
+
+        case 0x1B: //DEC DE, Decrement DE
+            value_16 = cpu_get_DE(cpu);
+            value_16--;
+            cpu_set_DE(cpu,value_16);
+            break;
+
+        case 0x2B: //DEC HL, Decrement HL
+            value_16 = cpu_get_HL(cpu);
+            value_16--;
+            cpu_set_HL(cpu,value_16);
+            break;
+
+        case 0x3B: //DEC SP, Decrement Stack Pointer
+            value_16 = cpu->sp;
+            value_16--;
+            cpu->sp = value_16;
+            break;
+
+        case 0x09: // ADD HL,BC //add BC to HL, store in HL
+            uint16_t hl = cpu_get_HL(cpu);
+            uint16_t bc = cpu_get_BC(cpu);
+            uint32_t result_32 = (uint32_t)hl + bc;
+            cpu_set_HL(cpu,(uint16_t)result_32);
+
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((hl & 0x0FFF) + (bc & 0x0FFF)) > 0x0FFF);
+            cpu_set_flag(cpu, FLAG_C, result_32 > 0xFFFF);
+            break;
+
+        case 0x19: // ADD HL,DE //add DE to HL, store in HL
+            hl = cpu_get_HL(cpu);
+            uint16_t de = cpu_get_DE(cpu);
+            result_32 = (uint32_t)hl + de;
+            cpu_set_HL(cpu,(uint16_t)result_32);
+
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((hl & 0x0FFF) + (de & 0x0FFF)) > 0x0FFF);
+            cpu_set_flag(cpu, FLAG_C, result_32 > 0xFFFF);
+            break;
+
+        case 0x29: // ADD HL,HL //add HL to HL, store in HL
+            hl = cpu_get_HL(cpu);
+
+            result_32 = (uint32_t)hl + hl;
+            cpu_set_HL(cpu,(uint16_t)result_32);
+
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((hl & 0x0FFF) + (hl & 0x0FFF)) > 0x0FFF);
+            cpu_set_flag(cpu, FLAG_C, result_32 > 0xFFFF);
+            break;
+
+        case 0x39: // ADD HL,SP //add the Stack Pointer to HL, store in HL
+            hl = cpu_get_HL(cpu);
+            sp = cpu->sp;
+            result_32 = (uint32_t)hl + sp;
+            cpu_set_HL(cpu,(uint16_t)result_32);
+
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((hl & 0x0FFF) + (sp                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           & 0x0FFF)) > 0x0FFF);
+            cpu_set_flag(cpu, FLAG_C, result_32 > 0xFFFF);
+            break;
+
+        case 0xE8: //ADD SP, d8// add signed 8bit offset to SP, store in SP
+            value = cpu_fetch_byte(cpu, BUS);
+            offset = (int8_t)value;
+            sp = cpu->sp;
+            cpu->sp = (uint16_t)(sp + offset);
+
+            cpu_set_flag(cpu, FLAG_Z, 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, ((sp & 0x0F) + (value & 0x0F)) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, ((sp & 0xFF) + value) > 0xFF);
+            break;
+
+        case 0xF8: //LD HL, SP+d8 // sum sp and 8bit s_offset, store in HL
+            value = cpu_fetch_byte(cpu, BUS);
+            offset = (int8_t)value;
+            sp = cpu->sp;
+            cpu_set_HL(cpu,(uint16_t)(sp + offset));
+
+            cpu_set_flag(cpu, FLAG_Z, 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, ((sp & 0x0F) + (value & 0x0F)) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, ((sp & 0xFF) + value) > 0xFF);
+            break;
+
+        case 0xF9: //LD SP,HL // LOAD HL into the Stack Pointer
+            value_16 = cpu_get_HL(cpu);
+            cpu->sp = value_16;
+            break;
+
+        case 0xE0: //LDH (a8), A writes A into HRAM
+            value = cpu_fetch_byte(cpu, BUS);
+            uint16_t address = 0xFF00 + value;
+            a = cpu->a;
+            bus_write_byte(BUS, address, a);
+            break;
+
+        case 0xF0: //LDH A, (a8) //Writes HRAM byte into A
+            value = cpu_fetch_byte(cpu, BUS);
+            address = 0xFF00 + value;
+            a = bus_read_byte(BUS, address);
+            cpu->a = a;
+            break;
+
+        case 0xE2: //LD (C), A //writes register A to the address 0xFF00 + C, using register C as the 8-bit offset.
+            address = 0xFF00 + cpu->c;
+            a = cpu->a;
+            bus_write_byte(BUS, address, a);
+            break;
+
+        case 0xEA: //LD (a16), A//write register A to a 16-bit memory address.
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            address = ((uint16_t)high << 8) | low;
+            a = cpu->a;
+            bus_write_byte(BUS, address, a);
+            break;
+
+        case 0xFA://LD A, (a16) // Load byte at address into A
+        {
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
+            address = ((uint16_t)high << 8) | low;
+            cpu->a = bus_read_byte(BUS, address);
+            break;
+        }
+        case 0x32: //LD (HL-), A // writes A into byte at the address in HL, then decrements HL
+        {
+            address = cpu_get_HL(cpu);
+            a = cpu->a;
+            bus_write_byte(BUS, address, a);
+            cpu_set_HL(cpu, address - 1);
+            break;
+        }
+        case 0x3A: //LD A, (HL-) // writes byte at address HL into A, then decrements HL
+        {
+            address = cpu_get_HL(cpu);
+            cpu->a = bus_read_byte(BUS, address);
+            cpu_set_HL(cpu, address - 1);
+            break;
+        }
+        case 0x22: //LD (HL+), A // writes A into byte at the address in HL, then increments HL
+        {
+            address = cpu_get_HL(cpu);
+            a = cpu->a;
+            bus_write_byte(BUS, address, a);
+            cpu_set_HL(cpu, address + 1);
+            break;
+        }
+        case 0x2A: //LD A, (HL+) // writes byte at address HL into A, then increments HL
+        {
+            address = cpu_get_HL(cpu);
+            cpu->a = bus_read_byte(BUS, address);
+            cpu_set_HL(cpu, address + 1);
+            break;
+        }
+        case 0x14: //INC D
+        {
+            result = cpu->d + 1;
+            cpu->d = result;
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, (result & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x15: //DEC D
+        {
+            value = cpu->d;
+            result = cpu->d - 1;
+            cpu->d = result;
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (value & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x3C: //INC A
+        {
+            result = cpu->a + 1;
+            cpu->a = result;
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, (result & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x3D: //DEC A
+        {
+            value = cpu->a;
+            result = cpu->a - 1;
+            cpu->a = result;
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (value & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x1C: //INC E
+        {
+            result = cpu->e + 1;
+            cpu->e = result;
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, (result & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x1D: //DEC E
+        {
+            value = cpu->e;
+            result = cpu->e - 1;
+            cpu->e = result;
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (value & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x24: //INC H
+        {
+            result = cpu->h + 1;
+            cpu->h = result;
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, (result & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x25: //DEC H
+        {
+            value = cpu->h;
+            result = cpu->h - 1;
+            cpu->h = result;
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (value & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x2C: //INC L
+        {
+            result = cpu->l + 1;
+            cpu->l = result;
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, (result & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x2D: //DEC L
+        {
+            value = cpu->l;
+            result = cpu->l - 1;
+            cpu->l = result;
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (value & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x34: //INC (HL)
+        {
+            value_16 = cpu_get_HL(cpu);
+            value = bus_read_byte(BUS, value_16);
+            result = value + 1;
+
+            bus_write_byte(BUS, value_16, result);
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, (result & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x35: //DEC (HL)
+        {
+            value_16 = cpu_get_HL(cpu);
+            value = bus_read_byte(BUS, value_16);
+            result = value - 1;
+
+            bus_write_byte(BUS, value_16, result);
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (value & 0x0F) == 0);
+
+            break;
+        }
+
+        case 0x88: //ADC A, B// ADD A and B with carry , store in A
+        {
+            a = cpu->a;
+            b = cpu->b;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            result_16 = (uint16_t)a + b + carry;
+            cpu->a = (uint8_t)result_16;
+
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (b & 0x0F) + carry) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+
+            break;
+        }
+
+        case 0x89://ADC A, C// ADD A and C with carry , store in A
+        {
+            a = cpu->a;
+            c = cpu->c;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            result_16 = (uint16_t)a + c + carry;
+            cpu->a = (uint8_t)result_16;
+
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (c & 0x0F) + carry) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+
+            break;
+        }
+
+        case 0x98: //SBC A,B SUB A and B with carry
+        {
+            a = cpu->a;
+            b = cpu->b;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            result_16 = (uint16_t)a - b - carry;
+            result = (uint8_t)result_16;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H,
+                         (a & 0x0F) < ((b & 0x0F) + carry));
+            cpu_set_flag(cpu, FLAG_C, result < 0);
+
+        }
+
+        case 0x99:// SBC A,C
+            {
+                a = cpu->a;
+                c = cpu->c;
+                uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+                result_16 = (uint16_t)a - c - carry;
+                result = (uint8_t)result_16;
+                cpu->a = result;
+
+                cpu_set_flag(cpu, FLAG_Z, result == 0);
+                cpu_set_flag(cpu, FLAG_N, 1);
+                cpu_set_flag(cpu, FLAG_H,
+                             (a & 0x0F) < ((c & 0x0F) + carry));
+                cpu_set_flag(cpu, FLAG_C, result < 0);
+
+            }
 
         default:
             break;

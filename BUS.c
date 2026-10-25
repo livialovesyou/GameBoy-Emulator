@@ -21,6 +21,12 @@ uint8_t bus_read_byte(BUS *BUS, uint16_t address) {
         uint16_t index = (address - 0xC000);
         return BUS->wram[index];
     }
+
+    //Check HRAM
+    if (address >= 0xFF80 && address <= 0xFFFE) {
+        uint16_t index = address - 0xFF80;
+        return BUS->hram[index];
+    }
     return 0xFF;
 }
 
@@ -34,6 +40,13 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
     if (address >= 0xC000 && address <= 0xDFFF) {
         uint16_t index = (address - 0xC000);
         BUS->wram[index] = value;
+        return;
+    }
+
+    if (address >= 0xFF80 && address <= 0xFFFE) {
+        uint16_t index = (address - 0xFF80);
+        BUS->hram[index] = value;
+        return;
     }
 }
 
