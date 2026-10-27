@@ -866,6 +866,119 @@ void test_cpu_opcodes_5(void) {
         }
 
 
+    cpu.pc = 0xC000;
+    cpu.a = 0xF1;
+    cpu.d = 0xF2;
+    bus_write_byte(&BUS, cpu.pc, 0x82 );//ADD A, D // Add D to A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0xE3 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 1)) {
+        printf("CPU Opcodes test ADD A, D passed\n");
+        } else {
+            printf("CPU Opcodes test ADD A, D FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0xF1;
+    cpu.e = 0xF2;
+    bus_write_byte(&BUS, cpu.pc, 0x83 );//ADD A, E // Add E to A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0xE3 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 1)) {
+        printf("CPU Opcodes test ADD A, E passed\n");
+        } else {
+            printf("CPU Opcodes test ADD A, E FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0xF1;
+    cpu.h = 0xF2;
+    bus_write_byte(&BUS, cpu.pc, 0x84 );//ADD A, H // Add H to A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0xE3 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 1)) {
+        printf("CPU Opcodes test ADD A, H passed\n");
+        } else {
+            printf("CPU Opcodes test ADD A, H FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0xF1;
+    cpu.l = 0xF2;
+    bus_write_byte(&BUS, cpu.pc, 0x85 );//ADD A, L // Add L to A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0xE3 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 1)) {
+        printf("CPU Opcodes test ADD A, L passed\n");
+        } else {
+            printf("CPU Opcodes test ADD A, L FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0xF1;
+    cpu_set_HL(&cpu, 0xC100 );
+    bus_write_byte(&BUS, 0xC100, 0xF2 );
+    bus_write_byte(&BUS, cpu.pc, 0x86 );//ADD A, (HL) // Add (HL) to A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0xE3 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 1)) {
+        printf("CPU Opcodes test ADD A, (HL) passed\n");
+        } else {
+            printf("CPU Opcodes test ADD A, (HL) FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x05;
+
+    bus_write_byte(&BUS, cpu.pc, 0x87 );//ADD A, A // Add A to A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0A &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test ADD A, A passed\n");
+        } else {
+            printf("CPU Opcodes test ADD A, A FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0xF1;
+    bus_write_byte(&BUS, cpu.pc + 1, 0xF2 );
+    bus_write_byte(&BUS, cpu.pc, 0xC6 );//ADD A, d8 // Add d8 to A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0xE3 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 1)) {
+        printf("CPU Opcodes test ADD A, d8 passed\n");
+        } else {
+            printf("CPU Opcodes test ADD A, d8 FAIL\n");
+        }
+
+
     cpu.pc = 0xC100;
     cpu.a = 0x0F;
     cpu.c = 0x00;
@@ -878,6 +991,98 @@ void test_cpu_opcodes_5(void) {
         printf("CPU Opcodes test ADC A,C FAIL\n");
     }
 
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x0F;
+    cpu.d = 0x00;
+    cpu_set_flag(&cpu, FLAG_C,1);
+    bus_write_byte(&BUS, cpu.pc, 0x8A); //ADC A,D
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x10) {
+        printf("CPU Opcodes test ADC A,D passed\n");
+    } else {
+        printf("CPU Opcodes test ADC A,D FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x0F;
+    cpu.e = 0x00;
+    cpu_set_flag(&cpu, FLAG_C,1);
+    bus_write_byte(&BUS, cpu.pc, 0x8B); //ADC A,E
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x10) {
+        printf("CPU Opcodes test ADC A,E passed\n");
+    } else {
+        printf("CPU Opcodes test ADC A,E FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x0F;
+    cpu.h = 0x00;
+    cpu_set_flag(&cpu, FLAG_C,1);
+    bus_write_byte(&BUS, cpu.pc, 0x8C); //ADC A,H
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x10) {
+        printf("CPU Opcodes test ADC A,H passed\n");
+    } else {
+        printf("CPU Opcodes test ADC A,H FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x0F;
+    cpu.l = 0x00;
+    cpu_set_flag(&cpu, FLAG_C,1);
+    bus_write_byte(&BUS, cpu.pc, 0x8D); //ADC A,L
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x10) {
+        printf("CPU Opcodes test ADC A,L passed\n");
+    } else {
+        printf("CPU Opcodes test ADC A,L FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x0F;
+    cpu_set_HL(&cpu, 0xC150);
+    bus_write_byte(&BUS, 0xC150, 0x01);
+    cpu_set_flag(&cpu, FLAG_C,1);
+    bus_write_byte(&BUS, cpu.pc, 0x8E); //ADC A,(HL)
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x11) {
+        printf("CPU Opcodes test ADC A,(HL) passed\n");
+    } else {
+        printf("CPU Opcodes test ADC A,(HL) FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x01;
+    cpu_set_HL(&cpu, 0x01);
+    cpu_set_flag(&cpu, FLAG_C,1);
+    bus_write_byte(&BUS, cpu.pc, 0x8D); //ADC A,A
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x03) {
+        printf("CPU Opcodes test ADC A,A passed\n");
+    } else {
+        printf("CPU Opcodes test ADC A,A FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x0F;
+    cpu_set_HL(&cpu, 0x01);
+    cpu_set_flag(&cpu, FLAG_C,1);
+    bus_write_byte(&BUS, cpu.pc, 0xCE); //ADC A,d8
+    bus_write_byte(&BUS, cpu.pc + 1, 0x01);
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x11) {
+        printf("CPU Opcodes test ADC A,d8 passed\n");
+    } else {
+        printf("CPU Opcodes test ADC A,d8 FAIL\n");
+    }
 
 
     cpu.pc = 0xC000;
@@ -999,14 +1204,13 @@ void test_cpu_opcodes_5(void) {
     if (cpu.a == 0x0E &&
         (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
         (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
-        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
         (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
         printf("CPU Opcodes test SBC A, B passed\n");
         } else {
             printf("CPU Opcodes test SBC A, B FAIL\n");
         }
-    printf("A: %02X\n", cpu.a);
-    printf("F: %02X\n", cpu.f);
+
 
 
     cpu.pc = 0xC000;
@@ -1025,8 +1229,135 @@ void test_cpu_opcodes_5(void) {
         } else {
             printf("CPU Opcodes test SBC A, C FAIL\n");
         }
-    printf("A: %02X\n", cpu.a);
-    printf("F: %02X\n", cpu.f);
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x10;
+    cpu.d = 0x01;
+    cpu.f = 0x00;
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    bus_write_byte(&BUS, cpu.pc, 0x9A );//SBC A, D // Sub D from A with carry, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SBC A, D passed\n");
+        } else {
+            printf("CPU Opcodes test SBC A, D FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x10;
+    cpu.e = 0x01;
+    cpu.f = 0x00;
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    bus_write_byte(&BUS, cpu.pc, 0x9B );//SBC A, E // Sub E from A with carry, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SBC A, E passed\n");
+        } else {
+            printf("CPU Opcodes test SBC A, E FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x10;
+    cpu.h = 0x01;
+    cpu.f = 0x00;
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    bus_write_byte(&BUS, cpu.pc, 0x9C );//SBC A, H // Sub H from A with carry, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SBC A, H passed\n");
+        } else {
+            printf("CPU Opcodes test SBC A, H FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x10;
+    cpu.l = 0x01;
+    cpu.f = 0x00;
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    bus_write_byte(&BUS, cpu.pc, 0x9D );//SBC A, L // Sub L from A with carry, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SBC A, L passed\n");
+        } else {
+            printf("CPU Opcodes test SBC A, L FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x10;
+    cpu_set_HL(&cpu, 0xC100);
+    bus_write_byte(&BUS, 0xC100, 0x01 );
+    cpu.f = 0x00;
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    bus_write_byte(&BUS, cpu.pc, 0x9E );//SBC A, (HL) // Sub (HL) from A with carry, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SBC A, (HL) passed\n");
+        } else {
+            printf("CPU Opcodes test SBC A, (HL) FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x10;
+
+    cpu.f = 0x00;
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    bus_write_byte(&BUS, cpu.pc, 0x9F );//SBC A, A // Sub A from A with carry, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0xFF &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 1)) {
+        printf("CPU Opcodes test SBC A, A passed\n");
+        } else {
+            printf("CPU Opcodes test SBC A, A FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x10;
+    bus_write_byte(&BUS, cpu.pc + 1, 0x01 );
+    cpu.f = 0x00;
+    cpu_set_flag(&cpu, FLAG_C, 1);
+    bus_write_byte(&BUS, cpu.pc, 0xDE );//SBC A, d8 // Sub d8 from A with carry, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SBC A, d8 passed\n");
+        } else {
+            printf("CPU Opcodes test SBC A, d8 FAIL\n");
+        }
+
+
 
     cpu.pc = 0xC000;
     cpu.a = 0x3E;
@@ -1047,7 +1378,127 @@ void test_cpu_opcodes_5(void) {
 
     cpu.pc = 0xC000;
     cpu.a = 0x3E;
+    cpu.d = 0x0F;
+    cpu_set_flag(&cpu, FLAG_C, 0);
+    bus_write_byte(&BUS, cpu.pc, 0x92 );//SUB A, D // Sub D from A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x2F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SUB A, D passed\n");
+        } else {
+            printf("CPU Opcodes test SUB A, D FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.e = 0x0F;
+    cpu_set_flag(&cpu, FLAG_C, 0);
+    bus_write_byte(&BUS, cpu.pc, 0x93 );//SUB A, E // Sub E from A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x2F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SUB A, E passed\n");
+        } else {
+            printf("CPU Opcodes test SUB A, E FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.h = 0x0F;
+    cpu_set_flag(&cpu, FLAG_C, 0);
+    bus_write_byte(&BUS, cpu.pc, 0x94 );//SUB A, H // Sub H from A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x2F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SUB A, H passed\n");
+        } else {
+            printf("CPU Opcodes test SUB A, H FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.l = 0x0F;
+    cpu_set_flag(&cpu, FLAG_C, 0);
+    bus_write_byte(&BUS, cpu.pc, 0x95 );//SUB A, L // Sub L from A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x2F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SUB A, L passed\n");
+        } else {
+            printf("CPU Opcodes test SUB A, L FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu_set_HL(&cpu, 0xC100);
+    bus_write_byte(&BUS, 0xC100, 0x0F );
+    cpu_set_flag(&cpu, FLAG_C, 0);
+    bus_write_byte(&BUS, cpu.pc, 0x96 );//SUB A, (HL) // Sub (HL) from A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x2F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SUB A, (HL) passed\n");
+        } else {
+            printf("CPU Opcodes test SUB A, (HL) FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu_set_flag(&cpu, FLAG_C, 0);
+    bus_write_byte(&BUS, cpu.pc, 0x97 );//SUB A, A // Sub A from A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x00 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SUB A, A passed\n");
+        } else {
+            printf("CPU Opcodes test SUB A, A FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    bus_write_byte(&BUS, cpu.pc + 1, 0x0F );
+    cpu_set_flag(&cpu, FLAG_C, 0);
+    bus_write_byte(&BUS, cpu.pc, 0xD6 );//SUB A, d8 // Sub d8 from A, store in A, record all flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x2F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test SUB A, d8 passed\n");
+        } else {
+            printf("CPU Opcodes test SUB A, d8 FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
     cpu.b = 0x0F;
+    cpu.f = 0x00;
     bus_write_byte(&BUS, cpu.pc, 0xA0); //AND A, B //Bitwise AND between A and B, stores in A, record flags
     cpu_step(&cpu, &BUS);
     if (cpu.a == 0x0E &&
@@ -1060,10 +1511,11 @@ void test_cpu_opcodes_5(void) {
         printf("CPU Opcodes test AND A,B FAIL\n");
     }
 
+
     cpu.pc = 0xC000;
     cpu.a = 0x3E;
     cpu.c = 0x0F;
-    bus_write_byte(&BUS, cpu.pc, 0xA0); //AND A, C //Bitwise AND between A and C, stores in A, record flags
+    bus_write_byte(&BUS, cpu.pc, 0xA1); //AND A, C //Bitwise AND between A and C, stores in A, record flags
     cpu_step(&cpu, &BUS);
     if (cpu.a == 0x0E &&
         (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
@@ -1074,6 +1526,119 @@ void test_cpu_opcodes_5(void) {
         }   else {
             printf("CPU Opcodes test AND A,C FAIL\n");
         }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.d = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xA2); //AND A, D //Bitwise AND between A and D, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test AND A,D passed\n");
+        }   else {
+            printf("CPU Opcodes test AND A,D FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.e = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xA3); //AND A, E //Bitwise AND between A and E, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test AND A,E passed\n");
+        }   else {
+            printf("CPU Opcodes test AND A,E FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.h = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xA4); //AND A, H //Bitwise AND between A and H, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test AND A,H passed\n");
+        }   else {
+            printf("CPU Opcodes test AND A,H FAIL\n");
+        }
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.l = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xA5); //AND A, L //Bitwise AND between A and L, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test AND A,L passed\n");
+        }   else {
+            printf("CPU Opcodes test AND A,L FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu_set_HL(&cpu, 0xC100);
+    bus_write_byte(&BUS, 0xC100, 0x0F);
+    bus_write_byte(&BUS, cpu.pc, 0xA6); //AND A, (HL) //Bitwise AND between A and (HL), stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test AND A,(HL) passed\n");
+        }   else {
+            printf("CPU Opcodes test AND A,(HL) FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    bus_write_byte(&BUS, cpu.pc, 0xA7); //AND A, A //Bitwise AND between A and A, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x3E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test AND A,A passed\n");
+        }   else {
+            printf("CPU Opcodes test AND A,A FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+
+    bus_write_byte(&BUS, cpu.pc, 0xE6); //AND A, d8 //Bitwise AND between A and d8, stores in A, record flags
+    bus_write_byte(&BUS, cpu.pc + 1, 0x0F);
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test AND A,d8 passed\n");
+        }   else {
+            printf("CPU Opcodes test AND A,d8 FAIL\n");
+        }
+
 
     cpu.pc = 0xC000;
     cpu.a = 0x3E;
@@ -1105,6 +1670,120 @@ void test_cpu_opcodes_5(void) {
             printf("CPU Opcodes test OR A,C FAIL\n");
         }
 
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.d = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xB2); // OR A, D //Bitwise OR between A and D, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x3F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test OR A,D passed\n");
+        } else {
+            printf("CPU Opcodes test OR A,D FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.e = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xB3); // OR A, E //Bitwise OR between A and E, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x3F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test OR A,E passed\n");
+        } else {
+            printf("CPU Opcodes test OR A,E FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.h = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xB4); // OR A, H //Bitwise OR between A and H, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x3F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test OR A,H passed\n");
+        } else {
+            printf("CPU Opcodes test OR A,H FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.l = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xB5); // OR A, L //Bitwise OR between A and L, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x3F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test OR A,L passed\n");
+        } else {
+            printf("CPU Opcodes test OR A,L FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu_set_HL(&cpu, 0xC100);
+    bus_write_byte(&BUS, 0xC100, 0x0F);
+    bus_write_byte(&BUS, cpu.pc, 0xB6); // OR A, (HL) //Bitwise OR between A and (HL), stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x3F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test OR A,(HL) passed\n");
+        } else {
+            printf("CPU Opcodes test OR A,(HL) FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    bus_write_byte(&BUS, cpu.pc, 0xB7); // OR A, A //Bitwise OR between A and A, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x3E &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test OR A,A passed\n");
+        } else {
+            printf("CPU Opcodes test OR A,A FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    bus_write_byte(&BUS, cpu.pc, 0xF6); // OR A, d8 //Bitwise OR between A and d8, stores in A, record flags
+    bus_write_byte(&BUS, cpu.pc + 1, 0x0F);
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x3F &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test OR A,d8 passed\n");
+        } else {
+            printf("CPU Opcodes test OR A,d8 FAIL\n");
+        }
+
+
+
     cpu.pc = 0xC000;
     cpu.a = 0x3E;
     cpu.b = 0x0F;
@@ -1120,6 +1799,7 @@ void test_cpu_opcodes_5(void) {
             printf("CPU Opcodes test XOR A,B FAIL\n");
         }
 
+
     cpu.pc = 0xC000;
     cpu.a = 0x3E;
     cpu.c = 0x0F;
@@ -1134,6 +1814,120 @@ void test_cpu_opcodes_5(void) {
         } else {
             printf("CPU Opcodes test XOR A,C FAIL\n");
         }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.d = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xAA); // XOR A, D //Bitwise XOR between A and D, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x31 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test XOR A,D passed\n");
+        } else {
+            printf("CPU Opcodes test XOR A,D FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.e = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xAB); // XOR A, E //Bitwise XOR between A and E, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x31 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test XOR A,E passed\n");
+        } else {
+            printf("CPU Opcodes test XOR A,E FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.h = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xAC); // XOR A, H //Bitwise XOR between A and H, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x31 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test XOR A,H passed\n");
+        } else {
+            printf("CPU Opcodes test XOR A,H FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu.l = 0x0F;
+    bus_write_byte(&BUS, cpu.pc, 0xAD); // XOR A, L //Bitwise XOR between A and L, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x31 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test XOR A,L passed\n");
+        } else {
+            printf("CPU Opcodes test XOR A,L FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    cpu_set_HL(&cpu, 0xC100);
+    bus_write_byte(&BUS, 0xC100, 0x0F);
+    bus_write_byte(&BUS, cpu.pc, 0xAE); // XOR A, (HL) //Bitwise XOR between A and (HL), stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x31 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test XOR A,(HL) passed\n");
+        } else {
+            printf("CPU Opcodes test XOR A,(HL) FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+    bus_write_byte(&BUS, cpu.pc, 0xAF); // XOR A, A //Bitwise XOR between A and A, stores in A, record flags
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x00 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test XOR A,L passed\n");
+        } else {
+            printf("CPU Opcodes test XOR A,L FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x3E;
+
+    bus_write_byte(&BUS, cpu.pc, 0xEE); // XOR A, d8 //Bitwise XOR between A and d8, stores in A, record flags
+    bus_write_byte(&BUS, cpu.pc + 1, 0x0F);
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x31 &&
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test XOR A,d8 passed\n");
+        } else {
+            printf("CPU Opcodes test XOR A,d8 FAIL\n");
+        }
+
 
     cpu.pc = 0xC000;
     cpu.a = 0x25;
@@ -1164,6 +1958,119 @@ void test_cpu_opcodes_5(void) {
         } else {
             printf("CPU Opcodes test CP A,C FAIL\n");
         }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x25;
+    cpu.d = 0x10;
+    bus_write_byte(&BUS, cpu.pc, 0xBA); // CP A, D //Compare A and D, record flags
+    cpu_step(&cpu, &BUS);
+    if (
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test CP A,D passed\n");
+        } else {
+            printf("CPU Opcodes test CP A,D FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x25;
+    cpu.e = 0x10;
+    bus_write_byte(&BUS, cpu.pc, 0xBB); // CP A, E //Compare A and E, record flags
+    cpu_step(&cpu, &BUS);
+    if (
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test CP A,E passed\n");
+        } else {
+            printf("CPU Opcodes test CP A,E FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x25;
+    cpu.h = 0x10;
+    bus_write_byte(&BUS, cpu.pc, 0xBC); // CP A, H //Compare A and H, record flags
+    cpu_step(&cpu, &BUS);
+    if (
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test CP A,H passed\n");
+        } else {
+            printf("CPU Opcodes test CP A,H FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x25;
+    cpu.l = 0x10;
+    bus_write_byte(&BUS, cpu.pc, 0xBD); // CP A, L //Compare A and L, record flags
+    cpu_step(&cpu, &BUS);
+    if (
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test CP A,L passed\n");
+        } else {
+            printf("CPU Opcodes test CP A,L FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x25;
+    cpu_set_HL(&cpu, 0xC100);
+    bus_write_byte(&BUS, 0xC100, 0x10);
+    bus_write_byte(&BUS, cpu.pc, 0xBE); // CP A, (HL) //Compare A and (HL), record flags
+    cpu_step(&cpu, &BUS);
+    if (
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test CP A,(HL) passed\n");
+        } else {
+            printf("CPU Opcodes test CP A,(HL) FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x25;
+    bus_write_byte(&BUS, cpu.pc, 0xBF); // CP A, A //Compare A and A, record flags
+    cpu_step(&cpu, &BUS);
+    if (
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test CP A,A passed\n");
+        } else {
+            printf("CPU Opcodes test CP A,A FAIL\n");
+        }
+
+
+    cpu.pc = 0xC000;
+    cpu.a = 0x25;
+    bus_write_byte(&BUS, cpu.pc, 0xFE); // CP A, d8 //Compare A and d8, record flags
+    bus_write_byte(&BUS, cpu.pc + 1, 0x10);
+    cpu_step(&cpu, &BUS);
+    if (
+        (cpu_flag_is_set(&cpu, FLAG_Z) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_N) == 1) &&
+        (cpu_flag_is_set(&cpu, FLAG_H) == 0) &&
+        (cpu_flag_is_set(&cpu, FLAG_C) == 0)) {
+        printf("CPU Opcodes test CP A,d8 passed\n");
+        } else {
+            printf("CPU Opcodes test CP A,d8 FAIL\n");
+        }
+
 }
 
 void test_cpu_opcodes_6(void) {
@@ -1666,4 +2573,54 @@ void test_cpu_opcodes_8(void) {
         printf("CPU Opcodes test LD A, (HL+) FAIL\n");
     }
 
+}
+
+void test_cpu_opcodes_9(void) {
+    CPU cpu = {0};
+    BUS BUS = {0};
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x96;
+    bus_write_byte(&BUS, cpu.pc, 0x07); //RLCA
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x2D && cpu_flag_is_set(&cpu, FLAG_C)) {
+        printf("CPU Opcodes test RLCA passed\n");
+    } else {
+        printf("CPU Opcodes test RLCA FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x95;
+    bus_write_byte(&BUS, cpu.pc, 0x0F); //RRCA
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0xCA && cpu_flag_is_set(&cpu, FLAG_C)) {
+        printf("CPU Opcodes test RRCA passed\n");
+    } else {
+        printf("CPU Opcodes test RRCA FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x85;
+    cpu.f = 0x00;
+    bus_write_byte(&BUS, cpu.pc, 0x17); //RLA
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x0A && cpu_flag_is_set(&cpu, FLAG_C)) {
+        printf("CPU Opcodes test RLA passed\n");
+    } else {
+        printf("CPU Opcodes test RLA FAIL\n");
+    }
+
+
+    cpu.pc = 0xC100;
+    cpu.a = 0x85;
+    cpu.f = 0x00;
+    bus_write_byte(&BUS, cpu.pc, 0x1F); //RRA
+    cpu_step(&cpu, &BUS);
+    if (cpu.a == 0x42 && cpu_flag_is_set(&cpu, FLAG_C)) {
+        printf("CPU Opcodes test RRA passed\n");
+    } else {
+        printf("CPU Opcodes test RRA FAIL\n");
+    }
 }

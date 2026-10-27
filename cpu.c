@@ -3,6 +3,9 @@
 //
 
 #include "cpu.h"
+
+#include <stdio.h>
+
 #include "BUS.h"
 
 static uint8_t cpu_fetch_byte(CPU *cpu, BUS *BUS) {
@@ -10,6 +13,136 @@ static uint8_t cpu_fetch_byte(CPU *cpu, BUS *BUS) {
     cpu->pc++;
     return value;
 }
+
+
+
+static uint8_t cpu_cb_read_target(CPU *cpu, BUS *bus, uint8_t target)
+{
+    switch (target) {
+        case 0: return cpu->b;
+        case 1: return cpu->c;
+        case 2: return cpu->d;
+        case 3: return cpu->e;
+        case 4: return cpu->h;
+        case 5: return cpu->l;
+        case 6: return bus_read_byte(bus, cpu_get_HL(cpu));
+        case 7: return cpu->a;
+        default: return 0;
+    }
+}
+
+
+static void cpu_cb_write_target(CPU *cpu, BUS *BUS,
+                                uint8_t target, uint8_t value)
+{
+    switch (target) {
+        case 0: cpu->b = value; break;
+        case 1: cpu->c = value; break;
+        case 2: cpu->d = value; break;
+        case 3: cpu->e = value; break;
+        case 4: cpu->h = value; break;
+        case 5: cpu->l = value; break;
+        case 6: bus_write_byte(BUS, cpu_get_HL(cpu), value); break;
+        case 7: cpu->a = value; break;
+    }
+}
+
+
+void cpu_execute_cb(CPU *cpu, BUS *BUS, uint8_t opcode)
+{
+    uint8_t group = opcode >> 6;
+    uint8_t operation = (opcode >> 3) & 0x07;
+    uint8_t target = opcode & 0x07;
+
+    uint8_t value = cpu_cb_read_target(cpu, BUS, target);
+    uint8_t result;
+    uint8_t carry;
+
+    switch (group) {
+        case 0: // Rotates and shifts
+            switch (operation) {
+                case 0: // RLC r: Rotate left circular
+                    carry = (value >> 7) & 1;
+                    result = (uint8_t)((value << 1) | carry);
+                    break;
+
+                case 1: // RRC r: Rotate right circular
+                    carry = value & 1;
+                    result = (uint8_t)((value >> 1) | (carry << 7));
+                    break;
+
+                case 2: { // RL r: Rotate left through carry
+                    uint8_t old_carry =
+                        cpu_flag_is_set(cpu, FLAG_C);
+                    carry = (value >> 7) & 1;
+                    result = (uint8_t)((value << 1) | old_carry);
+                    break;
+                }
+
+                case 3: { // RR r: Rotate right through carry
+                    uint8_t old_carry =
+                        cpu_flag_is_set(cpu, FLAG_C);
+                    carry = value & 1;
+                    result = (uint8_t)((value >> 1)
+                                       | (old_carry << 7));
+                    break;
+                }
+
+                case 4: // SLA r: Shift left arithmetic
+                    carry = (value >> 7) & 1;
+                    result = (uint8_t)(value << 1);
+                    break;
+
+                case 5: // SRA r: Shift right, preserve bit 7
+                    carry = value & 1;
+                    result = (uint8_t)((value >> 1) | (value & 0x80));
+                    break;
+
+                case 6: // SWAP r: Swap upper and lower nibbles
+                    result = (uint8_t)((value << 4) | (value >> 4));
+                    carry = 0;
+                    break;
+
+                case 7: // SRL r: Shift right logical
+                    carry = value & 1;
+                    result = (uint8_t)(value >> 1);
+                    break;
+
+                default:
+                    return;
+            }
+
+            cpu_cb_write_target(cpu, BUS, target, result);
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, carry);
+            break;
+
+        case 1: // BIT b,r: Test bit; do not modify target
+            cpu_set_flag(cpu, FLAG_Z,
+                         (value & (1u << operation)) == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 1);
+            // Carry flag is preserved.
+            break;
+
+        case 2: // RES b,r: Clear bit; flags unchanged
+            result = (uint8_t)(value & ~(1u << operation));
+            cpu_cb_write_target(cpu, BUS, target, result);
+            break;
+
+        case 3: // SET b,r: Set bit; flags unchanged
+            result = (uint8_t)(value | (1u << operation));
+            cpu_cb_write_target(cpu, BUS, target, result);
+            break;
+
+        default:
+            break;
+    }
+}
+
 
 void cpu_step(CPU *cpu, BUS *BUS) {
     uint8_t opcode = bus_read_byte(BUS, cpu->pc);
@@ -367,7 +500,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_C, a < b);
             break;
 
-        case 0xB9: //CP A,B // Compare A and B, record flags
+        case 0xB9: //CP A,C // Compare A and C, record flags
             a = cpu->a;
             c = cpu->c;
 
@@ -1132,15 +1265,17 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             a = cpu->a;
             b = cpu->b;
             uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
-            result_16 = (uint16_t)a - b - carry;
-            result = (uint8_t)result_16;
+            //printf("carry 1: %d\n", carry);
+            int16_t sresult_16 = (int16_t)a - b - carry;
+            result = (uint8_t)sresult_16;
             cpu->a = result;
 
             cpu_set_flag(cpu, FLAG_Z, result == 0);
             cpu_set_flag(cpu, FLAG_N, 1);
             cpu_set_flag(cpu, FLAG_H,
                          (a & 0x0F) < ((b & 0x0F) + carry));
-            cpu_set_flag(cpu, FLAG_C, result < 0);
+            cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+            break;
 
         }
 
@@ -1149,17 +1284,891 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 a = cpu->a;
                 c = cpu->c;
                 uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
-                result_16 = (uint16_t)a - c - carry;
-                result = (uint8_t)result_16;
+                //printf("carry 2: %d\n", carry);
+               int16_t sresult_16 = (int16_t)a - c - carry;
+                result = (uint8_t)sresult_16;
                 cpu->a = result;
 
                 cpu_set_flag(cpu, FLAG_Z, result == 0);
                 cpu_set_flag(cpu, FLAG_N, 1);
                 cpu_set_flag(cpu, FLAG_H,
                              (a & 0x0F) < ((c & 0x0F) + carry));
-                cpu_set_flag(cpu, FLAG_C, result < 0);
-
+                cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+                break;
             }
+
+        case 0x9A:// SBC A,D
+        {
+            a = cpu->a;
+            uint8_t d = cpu->d;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            //printf("carry 2: %d\n", carry);
+            int16_t sresult_16 = (int16_t)a - d - carry;
+            result = (uint8_t)sresult_16;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H,
+                         (a & 0x0F) < ((d & 0x0F) + carry));
+            cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+            break;
+        }
+
+        case 0x9B:// SBC A,E
+        {
+            a = cpu->a;
+            uint8_t e = cpu->e;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            //printf("carry 2: %d\n", carry);
+            int16_t sresult_16 = (int16_t)a - e - carry;
+            result = (uint8_t)sresult_16;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H,
+                         (a & 0x0F) < ((e & 0x0F) + carry));
+            cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+            break;
+        }
+
+        case 0x9C:// SBC A,H
+        {
+            a = cpu->a;
+            uint8_t h = cpu->h;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            //printf("carry 2: %d\n", carry);
+           int16_t sresult_16 = (int16_t)a - h - carry;
+            result = (uint8_t)sresult_16;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H,
+                         (a & 0x0F) < ((h & 0x0F) + carry));
+            cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+            break;
+        }
+
+        case 0x9D:// SBC A,L
+        {
+            a = cpu->a;
+            uint8_t l = cpu->l;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            //printf("carry 2: %d\n", carry);
+            int16_t sresult_16 = (int16_t)a - l - carry;
+            result = (uint8_t)sresult_16;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H,
+                         (a & 0x0F) < ((l & 0x0F) + carry));
+            cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+            break;
+        }
+
+        case 0x9E:// SBC A, (HL)
+        {
+            a = cpu->a;
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            //printf("carry 2: %d\n", carry);
+           int16_t sresult_16 = (int16_t)a - value - carry;
+            result = (uint8_t)sresult_16;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H,
+                         (a & 0x0F) < ((value & 0x0F) + carry));
+            cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+            break;
+        }
+
+        case 0x9F:// SBC A,A
+        {
+            a = cpu->a;
+
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            //printf("carry 2: %d\n", carry);
+            int16_t sresult_16 = (int16_t)a - a - carry;
+            result = (uint8_t)sresult_16;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H,
+                         (a & 0x0F) < ((a & 0x0F) + carry));
+            cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+            break;
+        }
+
+        case 0x8A: //ADC A, D// ADD A and D with carry , store in A
+        {
+            a = cpu->a;
+            uint8_t d = cpu->d;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            result_16 = (uint16_t)a + d + carry;
+            cpu->a = (uint8_t)result_16;
+
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (d & 0x0F) + carry) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+
+            break;
+        }
+
+        case 0x8B: //ADC A, E// ADD A and E with carry , store in A
+        {
+            a = cpu->a;
+            uint8_t e = cpu->e;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            result_16 = (uint16_t)a + e + carry;
+            cpu->a = (uint8_t)result_16;
+
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (e & 0x0F) + carry) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+
+            break;
+        }
+
+        case 0x8C: //ADC A, H// ADD A and H with carry , store in A
+        {
+            a = cpu->a;
+            uint8_t h = cpu->h;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            result_16 = (uint16_t)a + h + carry;
+            cpu->a = (uint8_t)result_16;
+
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (h & 0x0F) + carry) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+
+            break;
+        }
+
+        case 0x8D: //ADC A, L// ADD A and L with carry , store in A
+        {
+            a = cpu->a;
+            uint8_t l = cpu->l;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            result_16 = (uint16_t)a + l + carry;
+            cpu->a = (uint8_t)result_16;
+
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (l & 0x0F) + carry) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+
+            break;
+        }
+
+        case 0x8E: //ADC A, (HL)// ADD A and (HL) with carry , store in A
+        {
+            a = cpu->a;
+            value = bus_read_byte(BUS, cpu_get_HL(cpu)); ;
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            result_16 = (uint16_t)a + value + carry;
+            cpu->a = (uint8_t)result_16;
+
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (value & 0x0F) + carry) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+
+            break;
+        }
+
+        case 0x8F: //ADC A, A// ADD A and A with carry , store in A
+        {
+            a = cpu->a;
+
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            result_16 = (uint16_t)a + a + carry;
+            cpu->a = (uint8_t)result_16;
+
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (a & 0x0F) + carry) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+
+            break;
+        }
+
+        case 0x82: //ADD A,D
+        {
+            a = cpu->a;
+            uint8_t d = cpu->d;
+
+            result_16 = a + d;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (d & 0x0F)) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            break;
+        }
+
+        case 0x83: //ADD A,E
+        {
+            a = cpu->a;
+            uint8_t e = cpu->e;
+
+            result_16 = a + e;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (e & 0x0F)) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            break;
+        }
+
+        case 0x84: //ADD A,H
+        {
+            a = cpu->a;
+            uint8_t h = cpu->h;
+
+            result_16 = a + h;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (h & 0x0F)) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            break;
+        }
+
+        case 0x85: //ADD A,L
+        {
+            a = cpu->a;
+            uint8_t l = cpu->l;
+
+            result_16 = a + l;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (l & 0x0F)) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            break;
+        }
+
+        case 0x86: //ADD A,(HL)
+        {
+            a = cpu->a;
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+
+            result_16 = a + value;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (value & 0x0F)) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            break;
+        }
+
+        case 0x87: //ADD A, A
+        {
+            a = cpu->a;
+
+            result_16 = a + a;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (a & 0x0F)) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            break;
+        }
+
+        case 0x92: //SUB A, D // Sub D from A, store in A, record all flags
+        {
+            a = cpu->a;
+            uint8_t d = cpu->d;
+
+            result_16 = a - d;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) < (d & 0x0F)));
+            cpu_set_flag(cpu, FLAG_C, a < d);
+            break;
+        }
+
+        case 0x93: //SUB A, E // Sub E from A, store in A, record all flags
+        {
+            a = cpu->a;
+            uint8_t e = cpu->e;
+
+            result_16 = a - e;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) < (e & 0x0F)));
+            cpu_set_flag(cpu, FLAG_C, a < e);
+            break;
+        }
+
+        case 0x94: //SUB A, H // Sub H from A, store in A, record all flags
+        {
+            a = cpu->a;
+            uint8_t h = cpu->h;
+
+            result_16 = a - h;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) < (h & 0x0F)));
+            cpu_set_flag(cpu, FLAG_C, a < h);
+            break;
+        }
+
+        case 0x95: //SUB A, L // Sub L from A, store in A, record all flags
+        {
+            a = cpu->a;
+            uint8_t l = cpu->l;
+
+            result_16 = a - l;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) < (l & 0x0F)));
+            cpu_set_flag(cpu, FLAG_C, a < l);
+            break;
+        }
+
+        case 0x96: //SUB A, (HL) // Sub (HL) from A, store in A, record all flags
+        {
+            a = cpu->a;
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+
+            result_16 = a - value;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) < (value & 0x0F)));
+            cpu_set_flag(cpu, FLAG_C, a < value);
+            break;
+        }
+
+        case 0x97: //SUB A, A // Sub A from A, store in A, record all flags
+        {
+            a = cpu->a;
+
+            result_16 = a - a;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xA2: //AND A,D
+        {
+            a = cpu->a;
+            uint8_t d = cpu->d;
+            result = a & d;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 1);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xA3: //AND A,E
+        {
+            a = cpu->a;
+            uint8_t e = cpu->e;
+            result = a & e;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 1);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xA4: //AND A,H
+        {
+            a = cpu->a;
+            uint8_t h = cpu->h;
+            result = a & h;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 1);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xA5: //AND A,L
+        {
+            a = cpu->a;
+            uint8_t l = cpu->l;
+            result = a & l;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 1);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xA6: //AND A,(HL)
+        {
+            a = cpu->a;
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+            result = a & value;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 1);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xA7: //AND A,A
+        {
+            a = cpu->a;
+
+            result = a & a;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 1);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xB2: // OR A, D //Bitwise OR between A and D, stores in A, record flags
+        {
+            a = cpu->a;
+            uint8_t d = cpu->d;
+            result = a | d;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xB3: // OR A, E //Bitwise OR between A and E, stores in A, record flags
+        {
+            a = cpu->a;
+            uint8_t e = cpu->e;
+            result = a | e;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xB4: // OR A, H //Bitwise OR between A and H, stores in A, record flags
+        {
+            a = cpu->a;
+            uint8_t h = cpu->h;
+            result = a | h;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xB5: // OR A, L //Bitwise OR between A and L, stores in A, record flags
+        {
+            a = cpu->a;
+            uint8_t l = cpu->l;
+            result = a | l;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xB6: // OR A, (HL) //Bitwise OR between A and (HL), stores in A, record flags
+        {
+            a = cpu->a;
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+            result = a | value;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xB7: // OR A, A //Bitwise OR between A and A, stores in A, record flags
+        {
+            a = cpu->a;
+            result = a | a;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xAA: // XOR A, D //Bitwise XOR between A and D, stores in A, record flags
+        {
+            a = cpu->a;
+            uint8_t d = cpu->d;
+            result = a ^ d;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xAB: // XOR A, E //Bitwise XOR between A and E, stores in A, record flags
+        {
+            a = cpu->a;
+            uint8_t e = cpu->e;
+            result = a ^ e;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xAC: // XOR A, H //Bitwise XOR between A and H, stores in A, record flags
+        {
+            a = cpu->a;
+            uint8_t h = cpu->h;
+            result = a ^ h;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xAD: // XOR A, L //Bitwise XOR between A and L, stores in A, record flags
+        {
+            a = cpu->a;
+            uint8_t l = cpu->l;
+            result = a ^ l;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xAE: // XOR A, (HL) //Bitwise XOR between A and (HL), stores in A, record flags
+        {
+            a = cpu->a;
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+            result = a ^ value;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xAF: // XOR A, A //Bitwise XOR between A and A, stores in A, record flags
+        {
+            a = cpu->a;
+            result = 0;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xBA: //CP A,D // Compare A and D, record flags
+        {
+            a = cpu->a;
+            uint8_t d = cpu->d;
+
+            cpu_set_flag(cpu, FLAG_Z, a == d);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (a & 0x0F) < (d & 0x0F));
+            cpu_set_flag(cpu, FLAG_C, a < d);
+            break;
+        }
+
+        case 0xBB: //CP A,E // Compare A and E, record flags
+        {
+            a = cpu->a;
+            uint8_t e = cpu->e;
+
+            cpu_set_flag(cpu, FLAG_Z, a == e);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (a & 0x0F) < (e & 0x0F));
+            cpu_set_flag(cpu, FLAG_C, a < e);
+            break;
+        }
+
+        case 0xBC: //CP A,H // Compare A and H, record flags
+        {
+            a = cpu->a;
+            uint8_t h = cpu->h;
+
+            cpu_set_flag(cpu, FLAG_Z, a == h);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (a & 0x0F) < (h & 0x0F));
+            cpu_set_flag(cpu, FLAG_C, a < h);
+            break;
+        }
+
+        case 0xBD: //CP A,L // Compare A and L, record flags
+        {
+            a = cpu->a;
+            uint8_t l = cpu->l;
+
+            cpu_set_flag(cpu, FLAG_Z, a == l);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (a & 0x0F) < (l & 0x0F));
+            cpu_set_flag(cpu, FLAG_C, a < l);
+            break;
+        }
+
+        case 0xBE: //CP A,(HL) // Compare A and (HL), record flags
+        {
+            a = cpu->a;
+            value = bus_read_byte(BUS, cpu_get_HL(cpu));
+
+            cpu_set_flag(cpu, FLAG_Z, a == value);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (a & 0x0F) < (value & 0x0F));
+            cpu_set_flag(cpu, FLAG_C, a < value);
+            break;
+        }
+
+        case 0xBF: //CP A,A // Compare A and A, record flags
+        {
+            a = cpu->a;
+
+            cpu_set_flag(cpu, FLAG_Z, 1);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xC6: //ADD A, d8 // Add B to A, store in A, record all flags
+        {
+            a = cpu->a;
+            value = cpu_fetch_byte(cpu, BUS);
+
+            result_16 = a + value;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (value & 0x0F)) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            break;
+        }
+
+        case 0xCE: //ADC A, d8// ADD A and d8 with carry , store in A
+        {
+            a = cpu->a;
+            value = cpu_fetch_byte(cpu, BUS);
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            result_16 = (uint16_t)a + value + carry;
+            cpu->a = (uint8_t)result_16;
+
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (value & 0x0F) + carry) > 0x0F);
+            cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+
+            break;
+        }
+
+        case 0xD6: //SUB A, d8 // Sub d8 from A, store in A, record all flags
+        {
+            a = cpu->a;
+            value = cpu_fetch_byte(cpu, BUS);
+
+            result_16 = a - value;
+            cpu->a = (uint8_t)result_16;
+            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) < (value & 0x0F)));
+            cpu_set_flag(cpu, FLAG_C, a < value);
+            break;
+        }
+
+        case 0xDE:// SBC A,d8
+        {
+            a = cpu->a;
+            value = cpu_fetch_byte(cpu, BUS);
+            uint8_t carry = cpu_flag_is_set(cpu, FLAG_C);
+            //printf("carry 2: %d\n", carry);
+            int16_t sresult_16 = (int16_t)a - value - carry;
+            result = (uint8_t)sresult_16;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H,
+                         (a & 0x0F) < ((value & 0x0F) + carry));
+            cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+            break;
+        }
+
+        case 0xE6: //AND A,d8
+        {
+            a = cpu->a;
+            value = cpu_fetch_byte(cpu, BUS);
+            result = a & value;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 1);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xEE: // XOR A, d8 //Bitwise XOR between A and d8, stores in A, record flags
+        {
+            a = cpu->a;
+            value = cpu_fetch_byte(cpu, BUS);
+            result = a ^ value;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xF6: // OR A, d8 //Bitwise OR between A and d8, stores in A, record flags
+        {
+            a = cpu->a;
+            value = cpu_fetch_byte(cpu, BUS);
+            result = a | value;
+            cpu->a = result;
+
+            cpu_set_flag(cpu, FLAG_Z, result == 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 0);
+            break;
+        }
+
+        case 0xFE: //CP A,d8 // Compare A and d8, record flags
+        {
+            a = cpu->a;
+            value = cpu_fetch_byte(cpu, BUS);
+
+            cpu_set_flag(cpu, FLAG_Z, a == value);
+            cpu_set_flag(cpu, FLAG_N, 1);
+            cpu_set_flag(cpu, FLAG_H, (a & 0x0F) < (value & 0x0F));
+            cpu_set_flag(cpu, FLAG_C, a < value);
+            break;
+        }
+
+        case 0x07: //RLCA//Rotate Left Circular Accumulator
+        {
+            a = cpu->a;
+           uint8_t carry = (a & 0x80) != 0;
+            a = (uint8_t)((a << 1) | carry);
+            cpu->a = a;
+            cpu_set_flag(cpu, FLAG_Z, 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, carry);
+            break;
+        }
+
+        case 0x0F: //RRCA//Rotate Right Circular Accumulator
+        {
+            a = cpu->a;
+            uint8_t carry = (a & 0x01) != 0;
+            a = (uint8_t)((a >> 1) | (carry << 7));
+            cpu->a = a;
+            cpu_set_flag(cpu, FLAG_Z, 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, carry);
+            break;
+        }
+
+        case 0x17: //RLA//Rotate Left through Carry, Accumulator
+        {
+            a = cpu->a;
+            uint8_t old_carry = cpu_flag_is_set(cpu, FLAG_C);
+            uint8_t new_carry = (a & 0x80) != 0;
+            a = (uint8_t)((a << 1) | old_carry);
+            cpu->a = a;
+            cpu_set_flag(cpu, FLAG_Z, 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, new_carry);
+            break;
+        }
+
+        case 0x1F: //RRA//Rotate Right through Carry, Accumulator
+        {
+            a = cpu->a;
+            uint8_t new_carry = (a & 0x01) != 0;
+            uint8_t old_carry = cpu_flag_is_set(cpu, FLAG_C);
+            a = (uint8_t)((a >> 1) | (old_carry << 7));
+            cpu->a = a;
+            cpu_set_flag(cpu, FLAG_Z, 0);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, new_carry);
+            break;
+        }
+        case 0xCB: //Prefix instructions
+        {
+            uint8_t cb_opcode = cpu_fetch_byte(cpu, BUS);
+            cpu_execute_cb(cpu, BUS, cb_opcode);
+            break;
+        }
+
+        case 0xF3: //DI
+        {
+            cpu->ime = 0;
+            break;
+        }
 
         default:
             break;

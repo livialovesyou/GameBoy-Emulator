@@ -12,6 +12,8 @@ typedef struct BUS {
 
     uint8_t wram[WRAM_SIZE];
     uint8_t hram[HRAM_SIZE];
+    uint8_t interrupt_enable; // IE: 0xFFFF
+    uint8_t interrupt_flags;  // IF: 0xFF0F
 } BUS;
 
 uint8_t bus_read_byte(BUS *BUS, uint16_t address);

@@ -27,6 +27,14 @@ uint8_t bus_read_byte(BUS *BUS, uint16_t address) {
         uint16_t index = address - 0xFF80;
         return BUS->hram[index];
     }
+
+    if (address == 0xFFFF) {
+        return BUS->interrupt_enable;
+    }
+    if (address == 0xFF0F) {
+        return BUS->interrupt_flags | 0xE0;
+    }
+
     return 0xFF;
 }
 
@@ -46,6 +54,16 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
     if (address >= 0xFF80 && address <= 0xFFFE) {
         uint16_t index = (address - 0xFF80);
         BUS->hram[index] = value;
+        return;
+    }
+
+    if (address == 0xFFFF) {
+        BUS->interrupt_enable = value;
+        return;
+    }
+
+    if (address == 0xFF0F) {
+        BUS->interrupt_flags = value & 0x1F;
         return;
     }
 }

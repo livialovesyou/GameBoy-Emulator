@@ -20,3 +20,4 @@ void test_cpu_opcodes_5(void);
 void test_cpu_opcodes_6(void);
 void test_cpu_opcodes_7(void);
 void test_cpu_opcodes_8(void);
+void test_cpu_opcodes_9(void);

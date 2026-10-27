@@ -58,6 +58,7 @@ static inline void cpu_set_HL(CPU *cpu, uint16_t value) {
 static inline int cpu_flag_is_set(const CPU *cpu, uint8_t flag) {
         return (cpu->f & flag) != 0;
 }
+
 static inline void cpu_set_flag(CPU *cpu, uint8_t flag, uint8_t set) {
         if (set) {
                 cpu->f |= flag;
@@ -77,3 +78,9 @@ static inline void cpu_set_AF(CPU *cpu, uint16_t value) {
 }
 
 void cpu_step(CPU *cpu, BUS *BUS);
+
+static uint8_t cpu_cb_read_target(CPU *cpu, BUS *BUS, uint8_t target);
+
+static void cpu_cb_write_target(CPU *cpu, BUS *BUS, uint8_t target, uint8_t value);
+
+void cpu_execute_cb(CPU *cpu, BUS *BUS, uint8_t opcode);
