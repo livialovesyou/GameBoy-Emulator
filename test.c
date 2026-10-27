@@ -2623,4 +2623,109 @@ void test_cpu_opcodes_9(void) {
     } else {
         printf("CPU Opcodes test RRA FAIL\n");
     }
+
+    cpu.pc = 0xC100;
+    cpu.sp = 0xD000;
+    bus_write_byte(&BUS, 0xC100, 0x76); // HALT
+    bus_write_byte(&BUS, 0xC101, 0x00); // NOP
+    cpu_step(&cpu, &BUS);
+    cpu_step(&cpu, &BUS);
+    if (cpu.pc == 0xC101 && cpu.halted == 1) {
+        printf("CPU Opcodes test HALT passed\n");
+    } else {
+        printf("CPU Opcodes test HALT FAIL\n");
+    }
+
+}
+
+void test_cpu_interrupts(void) {
+    CPU cpu = {0};
+    BUS BUS = {0};
+
+    cpu.pc = 0xC123;
+    cpu.sp = 0xD000;
+    cpu.ime = 1;
+    //Enable and request V-Blank
+    bus_write_byte(&BUS, 0xFFFF, 0x01);
+    bus_write_byte(&BUS, 0xFF0F, 0x01);
+    cpu_step(&cpu, &BUS);
+
+    if (cpu.pc == 0x40 &&
+        cpu.sp == 0xCFFE &&
+        cpu.ime == 0     &&
+        bus_read_byte(&BUS, 0xFF0F) == 0xE0 &&
+        bus_read_byte(&BUS, 0xCFFE + 1) == 0xC1 &&
+        bus_read_byte(&BUS, 0xCFFE) == 0x23) {
+        printf("CPU Opcodes test INTERRUPTS passed\n");
+    } else {
+        printf("CPU Opcodes test INTERRUPTS FAIL\n");
+    }
+    // printf("PC: %04X\n", cpu.pc);
+    // printf("SP: %04X\n", cpu.sp);
+    // printf("IME: %u\n", cpu.ime);
+    // printf("IF  = %02X\n", bus_read_byte(&BUS, 0xFF0F));
+    // printf("RET = %02X%02X\n",
+    //        bus_read_byte(&BUS, 0xCFFE + 1),
+    //        bus_read_byte(&BUS, 0xCFFE));
+
+
+    //Test Halt Bug
+    cpu.pc = 0xC100;
+    cpu.ime = 0;
+    cpu.b = 0;
+
+    bus_write_byte(&BUS, 0xFFFF, 0x01); // Enable V-Blank
+    bus_write_byte(&BUS, 0xFF0F, 0x01); // Request V-Blank
+    bus_write_byte(&BUS, 0xC100, 0x76); // HALT
+    bus_write_byte(&BUS, 0xC101, 0x04); // INC B
+    cpu_step(&cpu, &BUS); // Execute HALT
+
+    if (cpu.pc == 0xC101 &&
+        cpu.halted == 0 &&
+        cpu.halt_bug == 1) {
+        printf("CPU Opcodes test HALT BUG 1st_half passed\n");
+    } else {
+        printf("CPU Opcodes test HALT BUG 1st_half FAIL\n");
+    }
+    cpu_step(&cpu, &BUS); // Execute INC B with no PC increment
+
+    if (cpu.pc == 0xC101 &&
+        cpu.b == 1) {
+        printf("CPU Opcodes test HALT BUG 2nd_half passed\n");
+        } else {
+            printf("CPU Opcodes test HALT BUG 2nd_half FAIL\n");
+        }
+
+    //TEST EI delay
+    cpu.pc = 0xC100;
+    cpu.ime = 0;
+    bool pass = true;
+    bus_write_byte(&BUS, 0xC100, 0xFB); // EI
+    bus_write_byte(&BUS, 0xC101, 0x00); // NOP
+
+    cpu_step(&cpu, &BUS);
+    if (cpu.ime == 1) pass = false;
+    cpu_step(&cpu, &BUS);
+    if (cpu.ime == 1 && pass == true) {
+        printf("CPU Opcodes test EI passed\n");
+    } else {
+        printf("CPU Opcodes test EI FAIL\n");
+    }
+
+
+}
+
+void test_cpu(void) {
+    test_cpu_registers_1();
+    test_cpu_flags_1();
+    test_cpu_opcodes_1();
+    test_cpu_opcodes_2();
+    test_cpu_opcodes_3();
+    test_cpu_opcodes_4();
+    test_cpu_opcodes_5();
+    test_cpu_opcodes_6();
+    test_cpu_opcodes_7();
+    test_cpu_opcodes_8();
+    test_cpu_opcodes_9();
+    test_cpu_interrupts();
 }

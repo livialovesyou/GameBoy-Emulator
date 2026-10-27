@@ -24,7 +24,12 @@ typedef struct {
         uint16_t sp;    //Stack Pointer
         uint16_t pc;    //Program Counter
         uint8_t ime;    //Interrupt Master Enable
+        uint8_t ime_scheduled;
         uint64_t cycles;
+        uint8_t halted; //Halt
+        uint8_t halt_bug;
+
+
 } CPU;
 
 //Read/Write BC
@@ -84,3 +89,5 @@ static uint8_t cpu_cb_read_target(CPU *cpu, BUS *BUS, uint8_t target);
 static void cpu_cb_write_target(CPU *cpu, BUS *BUS, uint8_t target, uint8_t value);
 
 void cpu_execute_cb(CPU *cpu, BUS *BUS, uint8_t opcode);
+
+static int cpu_service_interrupt(CPU *cpu, BUS *BUS);

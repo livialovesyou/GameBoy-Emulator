@@ -8,9 +8,13 @@
 
 #include "BUS.h"
 
+uint8_t cycles = 4;
+
+
 static uint8_t cpu_fetch_byte(CPU *cpu, BUS *BUS) {
     uint8_t value = bus_read_byte(BUS, cpu->pc);
     cpu->pc++;
+    cpu->cycles += cycles;
     return value;
 }
 
@@ -143,53 +147,119 @@ void cpu_execute_cb(CPU *cpu, BUS *BUS, uint8_t opcode)
     }
 }
 
+static int cpu_service_interrupt(CPU *cpu, BUS *BUS) {
+    if (!cpu->ime) {
+        return 0;
+    }
+    //Find Enabled and requested interrupts
+    uint8_t ie = bus_read_byte(BUS, 0xFFFF);
+    uint8_t flags = bus_read_byte(BUS, 0xFF0F);
+    uint8_t pending = ie & flags & 0x1F;
+
+    if (pending == 0) {
+        return 0;
+    }
+
+    //find highest priority pending interrupt
+
+    uint8_t bit = 0;
+    while ((pending & (1u << bit)) == 0) {
+        bit++;
+    }
+
+    static const uint16_t vectors[5] = {
+        0x0040, // V-Blank
+        0x0048, // LCD STAT
+        0x0050, // Timer
+        0x0058, // Serial
+        0x0060  // Joypad
+    };
+    cpu->ime = 0;
+
+    //Clear selected interrupt request bit
+    flags &= (uint8_t) ~ (1u << bit);
+    bus_write_byte(BUS, 0xFF0F, flags);
+
+    //Save current Program Counter to the SP
+    cpu->sp--;
+    bus_write_byte(BUS, cpu->sp, (uint8_t)(cpu->pc >> 8));
+    cpu->sp--;
+    bus_write_byte(BUS, cpu->sp, (uint8_t)(cpu->pc & 0xFF));
+
+    //begin vector execution
+    cpu->pc = vectors[bit];
+    return 1;
+}
 
 void cpu_step(CPU *cpu, BUS *BUS) {
+
+
+
+    if (cpu_service_interrupt(cpu, BUS)) {
+        cpu->cycles += cycles;
+        return;
+    }
+
+    if (cpu->halted) {
+        uint8_t ie = bus_read_byte(BUS, 0xFFFF);
+        uint8_t flags = bus_read_byte(BUS, 0xFF0F);
+        uint8_t pending = ie & flags & 0x1F;
+
+        if (pending == 0) {
+            return;
+        }
+
+        cpu->halted = 0;
+    }
+
+    if (cpu->ime_scheduled == 1) {
+        cpu->ime = 1;
+    }
+
+
     uint8_t opcode = bus_read_byte(BUS, cpu->pc);
-    cpu->pc++;
+    if (cpu->halt_bug) {
+        cpu->halt_bug = 0;
+    } else {
+        cpu->pc++;
+    }
 
     switch (opcode) {
         case 0x00: // NOP
             break;
 
         case 0x3E: //LD A, d8
-            uint8_t value = bus_read_byte(BUS, cpu->pc);
-            cpu->pc++;
+            uint8_t value = cpu_fetch_byte(cpu, BUS);
             cpu->a = value;
             break;
         case 0x06: //LD B, d8
-            value = bus_read_byte(BUS, cpu->pc);
-            cpu->pc++;
+            value = cpu_fetch_byte(cpu, BUS);
+
             cpu->b = value;
             break;
 
         case 0x0E:  //LD C, d8
-            value = bus_read_byte(BUS, cpu->pc);
-            cpu->pc++;
+            value = cpu_fetch_byte(cpu, BUS);
             cpu->c = value;
             break;
 
         case 0x16:  //LD D, d8
-            value = bus_read_byte(BUS, cpu->pc);
-            cpu->pc++;
+            value = cpu_fetch_byte(cpu, BUS);
             cpu->d = value;
             break;
 
         case 0x1E:  //LD E, d8
-            value = bus_read_byte(BUS, cpu->pc);
-            cpu->pc++;
+            value = cpu_fetch_byte(cpu, BUS);
             cpu->e = value;
             break;
 
         case 0x26:  //LD H, d8
-            value = bus_read_byte(BUS, cpu->pc);
-            cpu->pc++;
+            value = cpu_fetch_byte(cpu, BUS);
             cpu->h = value;
             break;
 
         case 0x2E:  //LD L,d8
-            value = bus_read_byte(BUS, cpu->pc);
-            cpu->pc++;
+            value = cpu_fetch_byte(cpu, BUS);
             cpu->l = value;
             break;
 
@@ -2167,12 +2237,34 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         case 0xF3: //DI
         {
             cpu->ime = 0;
+            cpu->ime_scheduled = 0;
             break;
         }
+
+        case 0xFB: //EI
+        {
+            cpu->ime_scheduled = 1;
+        }
+
+        case 0x76: //HALT
+            uint8_t ie = bus_read_byte(BUS, 0xFFFF);
+            uint8_t flags = bus_read_byte(BUS, 0xFF0F);
+            uint8_t pending = ie & flags & 0x1F;
+
+            if (!cpu->ime && pending != 0) {
+                cpu->halt_bug = 1;
+            } else {
+                cpu->halted = 1;
+            }
+            break;
+
+        case 0x12:
 
         default:
             break;
     }
 
+
     (void)opcode;
 }
+
