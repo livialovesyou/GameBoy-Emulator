@@ -7,6 +7,7 @@
 #define WRAM_SIZE 8192
 #define HRAM_SIZE 127
 #include <stdint.h>
+#include "ppu.h"
 
 typedef struct BUS {
 
@@ -14,6 +15,8 @@ typedef struct BUS {
     uint8_t hram[HRAM_SIZE];
     uint8_t interrupt_enable; // IE: 0xFFFF
     uint8_t interrupt_flags;  // IF: 0xFF0F
+
+    PPU *ppu;
 } BUS;
 
 uint8_t bus_read_byte(BUS *BUS, uint16_t address);

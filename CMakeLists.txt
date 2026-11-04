@@ -10,4 +10,6 @@ add_executable(GB_Emulator main.c
         test.h
         cpu.c
         cpu.h
+        ppu.c
+        ppu.h
 )

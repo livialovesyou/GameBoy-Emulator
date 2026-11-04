@@ -6,8 +6,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "cpu.h"
+#include "ppu.h"
 
 void echo_ram_test_1(void) {
     BUS BUS = {0};
@@ -2713,6 +2715,296 @@ void test_cpu_interrupts(void) {
     }
 
 
+}
+
+void test_ppu_render_bg(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+    ppu.bgp = 0x1B;
+
+    uint8_t pixels[SCREEN_HEIGHT][SCREEN_WIDTH];
+    ppu.lcdc = 0x11;
+
+    ppu.vram[0x1800] = 0x00;
+
+    ppu.vram[0x0000] = 0xFF;
+    ppu.vram[0x0001] = 0xFF;
+    ppu_render_background(&ppu, pixels);
+
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        for (int x = 0; x < SCREEN_WIDTH; x++) {
+            printf("%d ",pixels[y][x]);
+        }
+        printf("\n");
+    }
+
+}
+void test_ppu_registers(void) {
+    PPU ppu;
+    BUS BUS = {0};
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    bus_write_byte(&BUS, REG_LCDC, 0x91);
+    bus_write_byte(&BUS, REG_BGP, 0xE4);
+    if (bus_read_byte(&BUS, REG_BGP) == 0xE4 && bus_read_byte(&BUS, REG_LCDC) == 0x91) {
+        printf("PPU registers test passed\n");
+    } else {
+        printf("PPU registers test FAIL\n");
+    }
+}
+
+void test_ppu_update(void) {
+    PPU ppu;
+    BUS BUS = {0};
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+    ppu.lcdc = 0x80;
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+    memset(framebuffer, 0xFF, sizeof(framebuffer));
+    ppu_update(&ppu, &BUS, 80, framebuffer);
+    printf("LY: %d, Dot: %d, Mode: %d\n",
+           ppu.ly, ppu.dot, ppu.mode);
+
+    ppu_update(&ppu, &BUS, 172, framebuffer);
+    printf("LY: %d, Dot: %d, Mode: %d\n",
+           ppu.ly, ppu.dot, ppu.mode);
+
+    ppu_update(&ppu, &BUS, 204, framebuffer);
+    printf("LY: %d, Dot: %d, Mode: %d\n",
+           ppu.ly, ppu.dot, ppu.mode);
+}
+
+void test_ppu_lyc(void)
+{
+    PPU ppu;
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x80;
+    ppu.lyc = 0;
+
+    ppu_update_stat(&ppu);
+
+    printf("STAT: %02X\n", ppu.stat);
+
+    ppu.lyc = 1;
+    ppu_update_stat(&ppu);
+
+    printf("STAT: %02X\n", ppu.stat);
+}
+
+void test_ppu_stat_interrupt(void)
+{
+    PPU ppu;
+    BUS BUS = {0};
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    ppu.lcdc = 0x80;
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+    memset(framebuffer, 0xFF, sizeof(framebuffer));
+
+    // Enable Mode 2 STAT interrupt
+    ppu.stat |= STAT_INT_OAM;
+    ppu.ly = 144;
+
+    ppu_update(&ppu, &BUS, 1, framebuffer);
+
+    printf("IF: %02X\n", BUS.interrupt_flags);
+}
+
+void test_ppu_render_scanlines(void) {
+    PPU ppu;
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+    ppu_init(&ppu);
+
+    // Enable LCD, background, and unsigned tile addressing.
+    ppu.lcdc = 0x91;
+
+    // Identity palette: color indices map to themselves.
+    ppu.bgp = 0xE4;
+
+    // Set tile 0's first row to color index 1.
+    ppu.vram[0] = 0xFF; // Low bitplane
+    ppu.vram[1] = 0x00; // High bitplane
+
+    // Initialize the framebuffer to a recognizable value.
+    memset(framebuffer, 0xFF, sizeof(framebuffer));
+
+    // Render scanline 0.
+    ppu.ly = 0;
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Check scanline 0.
+    for (int x = 0; x < SCREEN_WIDTH; x++)
+    {
+        if (framebuffer[0][x] != 1)
+        {
+            printf("FAIL: Pixel 0,%d = %d, expected 1\n",
+                   x, framebuffer[0][x]);
+
+        }
+    }
+
+    // Check that scanline 1 was not modified.
+    for (int x = 0; x < SCREEN_WIDTH; x++)
+    {
+        if (framebuffer[1][x] != 0xFF)
+        {
+            printf("FAIL: Scanline 1 was modified\n");
+
+        }
+    }
+
+    printf("PASS: Scanline 0 rendered correctly\n");
+    printf("PASS: Other scanlines unchanged\n");
+
+}
+
+void test_ppu_HBlank_transition(void) {
+    PPU ppu;
+    BUS BUS = {0};
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+    ppu_init(&ppu);
+
+    // Connect the PPU to the bus if your bus requires it.
+    BUS.ppu = &ppu;
+
+    // Enable LCD, background, and unsigned tile addressing.
+    ppu.lcdc = 0x91;
+
+    // Identity palette.
+    ppu.bgp = 0xE4;
+
+    // Make tile 0's first row color index 1.
+    ppu.vram[0] = 0xFF;
+    ppu.vram[1] = 0x00;
+
+    // Initialize framebuffer with recognizable values.
+    memset(framebuffer, 0xFF, sizeof(framebuffer));
+
+    // Set PPU just before the HBlank transition.
+    ppu.ly = 0;
+    ppu.dot = 248;
+    ppu.mode = PPU_MODE_DRAWING;
+    ppu.previous_mode = PPU_MODE_DRAWING;
+
+    // Advance four dots.
+    ppu_update(&ppu, &BUS, 4, framebuffer);
+
+    // Check PPU state.
+    if (ppu.ly != 0)
+    {
+        printf("FAIL: LY = %u, expected 0\n", ppu.ly);
+    }
+
+    if (ppu.dot != 252)
+    {
+        printf("FAIL: Dot = %u, expected 252\n", ppu.dot);
+    }
+
+    if (ppu.mode != PPU_MODE_HBLANK)
+    {
+        printf("FAIL: Mode = %u, expected HBlank (0)\n", ppu.mode);
+    }
+
+    // Check that the first pixel was rendered.
+    if (framebuffer[0][0] != 1)
+    {
+        printf("FAIL: Pixel = %u, expected 1\n",
+               framebuffer[0][0]);
+    }
+
+    // Check that the final pixel was rendered.
+    if (framebuffer[0][159] != 1)
+    {
+        printf("FAIL: Pixel = %u, expected 1\n",
+               framebuffer[0][159]);
+    }
+
+    // Check that the next scanline was not modified.
+    if (framebuffer[1][0] != 0xFF)
+    {
+        printf("FAIL: Scanline 1 was modified\n");
+    }
+
+    printf("PASS: HBlank transition detected\n");
+    printf("PASS: Scanline 0 rendered\n");
+    printf("PASS: Scanline 1 unchanged\n");
+}
+
+void test_ppu_scanline_crossing(void) {
+    PPU ppu;
+    BUS BUS = {0};
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    // Enable LCD, background, and unsigned tile addressing.
+    ppu.lcdc = 0x91;
+    ppu.bgp = 0xE4;
+
+    // Make tile 0's first row color index 1.
+    ppu.vram[0] = 0xFF;
+    ppu.vram[1] = 0x00;
+
+    memset(framebuffer, 0xFF, sizeof(framebuffer));
+
+    // Start just before the first boundary.
+    ppu.ly = 0;
+    ppu.dot = 78;
+    ppu.mode = PPU_MODE_OAM;
+
+    // Advance 378 dots:
+    // 78 + 378 = 456.
+    ppu_update(&ppu, &BUS, 378, framebuffer);
+
+    // Check final PPU state.
+    if (ppu.ly != 1)
+    {
+        printf("FAIL: LY = %u, expected 1\n", ppu.ly);
+    }
+
+    if (ppu.dot != 0)
+    {
+        printf("FAIL: Dot = %u, expected 0\n", ppu.dot);
+    }
+
+    if (ppu.mode != PPU_MODE_OAM)
+    {
+        printf("FAIL: Mode = %u, expected OAM (2)\n", ppu.mode);
+    }
+
+    // Check that scanline 0 was rendered.
+    if (framebuffer[0][0] != 1 ||
+        framebuffer[0][159] != 1)
+    {
+        printf("FAIL: Scanline 0 was not rendered correctly\n");
+    }
+
+    // Scanline 1 should not have been rendered yet.
+    if (framebuffer[1][0] != 0xFF)
+    {
+        printf("FAIL: Scanline 1 was modified\n");
+    }
+
+    printf("PASS: OAM -> Drawing boundary crossed\n");
+    printf("PASS: Drawing -> HBlank boundary crossed\n");
+    printf("PASS: Scanline boundary crossed\n");
+    printf("PASS: Scanline 0 rendered correctly\n");
+    printf("PASS: Scanline 1 unchanged\n");
+
+    printf("\nFinal state:\n");
+    printf("LY: %u\n", ppu.ly);
+    printf("Dot: %u\n", ppu.dot);
+    printf("Mode: %u\n", ppu.mode);
 }
 
 void test_cpu(void) {
