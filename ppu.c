@@ -14,6 +14,8 @@ void ppu_init(PPU *ppu) {
     ppu->previous_mode = PPU_MODE_OAM;
     ppu->ly = 0;
     ppu->dot = 0;
+
+    ppu->window_line = 0;
 }
 
 void ppu_decode_tile(PPU *ppu, uint16_t tile_address, uint8_t pixels[8][8]) {
@@ -273,8 +275,10 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
                 if (ppu->ly == 144)
                     BUS->interrupt_flags |= INT_VBLANK;
 
-                if (ppu->ly >= 154)
+                if (ppu->ly >= 154) {
                     ppu->ly = 0;
+                    ppu->window_line = 0;
+                }
 
                 if (ppu->ly >= 144)
                     ppu->mode = PPU_MODE_VBLANK;
@@ -342,6 +346,7 @@ void ppu_render_scanline(PPU *ppu, uint8_t pixels[SCREEN_HEIGHT][SCREEN_WIDTH]) 
     } else {
         map_address = 0x9800;
     }
+    int window_rendered = 0;
 
     for (int x = 0; x < SCREEN_WIDTH; x++) {
         uint8_t bg_x = (uint8_t)(x + ppu->scx);
@@ -367,7 +372,101 @@ void ppu_render_scanline(PPU *ppu, uint8_t pixels[SCREEN_HEIGHT][SCREEN_WIDTH]) 
         uint8_t pixel_y = bg_y % 8;
 
         uint8_t color_index = tile_pixels[pixel_y][pixel_x];
-        pixels[y][x] = ppu_get_bg_color(ppu, color_index);
+        // pixels[y][x] = ppu_get_bg_color(ppu, color_index);
+
+        // Convert Background color index to shade.
+        uint8_t color = ppu_get_bg_color(ppu, color_index);
+
+        //Render Window
+        if (ppu_window_is_visible(ppu, x, ppu->ly)) {
+            uint8_t w_color_index = ppu_get_window_pixel(ppu, x);
+            color = ppu_get_bg_color(ppu, w_color_index);
+            window_rendered = 1;
+        }
+
+        //Store final pixel
+        pixels[y][x] = color;
+    }
+    if (window_rendered)
+        ppu->window_line++;
+
+}
+
+int ppu_window_is_visible(PPU *ppu, int x, int y) {
+    // Window must be enabled (LCDC bit 5).
+    if (!(ppu->lcdc & 0x20))
+        return 0;
+
+    // Background and Window must be enabled (LCDC bit 0).
+    if (!(ppu->lcdc & 0x01))
+        return 0;
+
+    // Window cannot appear above its WY position.
+    if (y < ppu->wy)
+        return 0;
+
+    // WX is offset by 7 pixels.
+    int window_x = (int)ppu->wx - 7;
+
+    // Window must start before the right edge of the screen.
+    if (window_x >= SCREEN_WIDTH)
+        return 0;
+
+    // Pixel must be at or to the right of the Window's start.
+    if (x < window_x)
+        return 0;
+
+    return 1;
+}
+
+void ppu_get_window_coordinates(PPU *ppu, int x, uint8_t *tile_x, uint8_t *tile_y, uint8_t *pixel_x, uint8_t *pixel_y) {
+    // Convert screen X to Window X.
+    int window_x = x - ((int)ppu->wx - 7);
+
+    // Window coordinates use window_line vertically.
+    int window_y = ppu->window_line;
+
+    // Determine which tile contains this pixel.
+    *tile_x = window_x / 8;
+    *tile_y = window_y / 8;
+
+    // Determine the pixel inside that tile.
+    *pixel_x = window_x % 8;
+    *pixel_y = window_y % 8;
+}
+
+uint8_t ppu_get_window_pixel(PPU *ppu, int x) {
+    uint8_t tile_x, tile_y;
+    uint8_t pixel_x, pixel_y;
+
+    ppu_get_window_coordinates(ppu, x, &tile_x, &tile_y, &pixel_x, &pixel_y);
+
+    // Select the Window tile map.
+    uint16_t map_address;
+
+    if (ppu->lcdc & 0x40)
+        map_address = 0x9C00;
+    else
+        map_address = 0x9800;
+
+    // Find the tile number in the map.
+    uint16_t map_offset = tile_y * 32 + tile_x;
+
+    uint8_t tile_number = ppu->vram[(map_address - 0x8000) + map_offset];
+
+    // Determine the tile's address.
+    uint16_t tile_address;
+
+    if (ppu->lcdc & 0x10) {
+        tile_address = 0x8000 + tile_number * 16;
+    } else {
+        tile_address = 0x9000 + (int8_t)tile_number * 16;
     }
 
+    //Decode the tile
+    uint8_t tile_pixels[8][8];
+    ppu_decode_tile(ppu, tile_address, tile_pixels);
+
+    //Return pixel's color index
+    return tile_pixels[pixel_y][pixel_x];
 }

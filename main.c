@@ -19,6 +19,12 @@ int main(void) {
     test_ppu_render_scanlines();
     test_ppu_HBlank_transition();
     test_ppu_scanline_crossing();
+    test_ppu_window_helper();
+    test_ppu_window_coords();
+    test_ppu_window_pixel();
+    test_ppu_render_scanline_window();
+    test_ppu_window_line_progression();
+    test_ppu_window_line_reset();
 
     return 0;
 }

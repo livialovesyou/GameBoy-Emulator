@@ -30,5 +30,11 @@ void test_ppu_stat_interrupt(void);
 void test_ppu_render_scanlines(void);
 void test_ppu_HBlank_transition(void);
 void test_ppu_scanline_crossing(void);
+void test_ppu_window_helper(void);
+void test_ppu_window_coords(void);
+void test_ppu_window_pixel(void);
+void test_ppu_render_scanline_window(void);
+void test_ppu_window_line_progression(void);
+void test_ppu_window_line_reset(void);
 
 void test_cpu(void);

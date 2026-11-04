@@ -43,9 +43,12 @@ typedef struct PPU {
     uint8_t wy;    // FF4A
     uint8_t wx;    // FF4B
 
+    uint8_t window_line;
+
     uint16_t dot;
     uint8_t mode;
     uint8_t previous_mode;
+
 } PPU;
 
 void ppu_init(PPU *ppu);
@@ -58,3 +61,6 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles, uint8_t framebuffer[SCREEN_
 void ppu_update_stat(PPU *ppu);
 void ppu_request_stat_interrupt(PPU *ppu, BUS *BUS);
 void ppu_render_scanline(PPU *ppu, uint8_t pixels[SCREEN_HEIGHT][SCREEN_WIDTH]);
+int ppu_window_is_visible(PPU *ppu, int x, int y);
+void ppu_get_window_coordinates(PPU *ppu, int x, uint8_t *tile_x, uint8_t *tile_y, uint8_t *pixel_x, uint8_t *pixel_y);
+uint8_t ppu_get_window_pixel(PPU *ppu, int x);

@@ -3,6 +3,8 @@
 //
 
 #include "test.h"
+
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -3005,6 +3007,233 @@ void test_ppu_scanline_crossing(void) {
     printf("LY: %u\n", ppu.ly);
     printf("Dot: %u\n", ppu.dot);
     printf("Mode: %u\n", ppu.mode);
+}
+
+void test_ppu_window_helper(void) {
+    PPU ppu;
+    BUS BUS = {0};
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    ppu.lcdc = 0x21; // Window enabled, BG enabled
+    ppu.wy = 50;
+    ppu.wx = 87;
+    // Window starts at x = 80, y = 50.
+    assert(ppu_window_is_visible(&ppu, 79, 50) == 0);
+    assert(ppu_window_is_visible(&ppu, 80, 50) == 1);
+    assert(ppu_window_is_visible(&ppu, 100, 50) == 1);
+    assert(ppu_window_is_visible(&ppu, 80, 49) == 0);
+
+    printf("PASS: Window horizontal position\n");
+    printf("PASS: Window vertical position\n");
+}
+
+void test_ppu_window_coords(void) {
+    PPU ppu;
+    BUS BUS = {0};
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+    uint8_t tile_x, tile_y;
+    uint8_t pixel_x, pixel_y;
+    ppu.wx = 87;
+    ppu.window_line = 10;
+
+    ppu_get_window_coordinates(
+    &ppu, 85,
+    &tile_x, &tile_y,
+    &pixel_x, &pixel_y
+);
+
+    assert(tile_x == 0);
+    assert(tile_y == 1);
+    assert(pixel_x == 5);
+    assert(pixel_y == 2);
+
+    printf("PASS: Window tile coordinates\n");
+    printf("PASS: Window pixel coordinates\n");
+}
+
+void test_ppu_window_pixel(void) {
+    PPU ppu;
+    BUS BUS = {0};
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    // Enable Window, BG, unsigned tile addressing,
+    // and select the 0x9800 Window map.
+    ppu.lcdc = 0x71;
+
+    // Place Window at screen coordinate (0, 0).
+    ppu.wx = 7;
+    ppu.wy = 0;
+    ppu.window_line = 0;
+
+    // Configure tile 0: every pixel has color index 1.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[y * 2] = 0xFF;
+        ppu.vram[y * 2 + 1] = 0x00;
+    }
+
+    uint8_t color = ppu_get_window_pixel(&ppu, 0);
+
+    assert(color == 1);
+
+    printf("PASS: Window pixel retrieved correctly\n");
+
+}
+
+void test_ppu_render_scanline_window(void) {
+    PPU ppu;
+    BUS BUS = {0};
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+    // Enable LCD, Window, Background and unsigned tile addressing.
+    ppu.lcdc = 0xF1;
+    // Window starts at screen coordinate (80, 0).
+    ppu.wx = 87;
+    ppu.wy = 0;// Use identity palette:
+    // color index 0 -> shade 0
+    // color index 1 -> shade 1
+    // color index 2 -> shade 2
+    // color index 3 -> shade 3
+    ppu.bgp = 0xE4;
+
+    // Initialize framebuffer.
+    memset(framebuffer, 0xFF, sizeof(framebuffer));
+
+    // Background map: tile 1.
+    ppu.vram[0x1800] = 1;
+
+    // Window map at 0x9C00: tile 2 in all ten positions.
+    for (int x = 0; x < 10; x++)
+    {
+        ppu.vram[0x1C00 + x] = 2;
+    }
+
+    // Tile 1: every pixel has color index 0.
+    for (int y = 0; y < 8; y++) {
+        ppu.vram[16 + y * 2] = 0x00;
+        ppu.vram[16 + y * 2 + 1] = 0x00;
+    }
+    // Tile 2: every pixel has color index 1.
+    for (int y = 0; y < 8; y++) {
+        ppu.vram[32 + y * 2] = 0xFF;
+        ppu.vram[32 + y * 2 + 1] = 0x00;
+    }
+    // Render scanline 0.
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Background should remain left of the Window.
+    assert(framebuffer[0][0] == 0);
+    assert(framebuffer[0][79] == 0);
+
+    // Window should replace Background from x = 80.
+    assert(framebuffer[0][80] == 1);
+    assert(framebuffer[0][100] == 1);
+    assert(framebuffer[0][159] == 1);
+
+    // Window line should advance once.
+    assert(ppu.window_line == 1);
+
+    printf("PASS: Background rendered correctly\n");
+    printf("PASS: Window replaces Background correctly\n");
+    printf("PASS: Window line counter advances\n");
+
+}
+
+void test_ppu_window_line_progression(void) {
+    PPU ppu;
+    BUS BUS = {0};
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+    ppu.lcdc = 0xF1;
+    ppu.wx = 7;  // Window starts at x = 0.
+    ppu.wy = 1;  // Window starts at screen line 1.
+    ppu.bgp = 0xE4;
+
+    // Window map: tile 1 in the first column.
+    ppu.vram[0x1C00] = 1;
+    ppu.vram[0x1C20] = 2;
+    ppu.vram[0x1C40] = 3;
+
+    // Tile 1: color index 1.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[16 + y * 2] = 0xFF;
+        ppu.vram[16 + y * 2 + 1] = 0x00;
+    }
+
+    // Tile 2: color index 2.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[32 + y * 2] = 0x00;
+        ppu.vram[32 + y * 2 + 1] = 0xFF;
+    }
+
+    // Tile 3: color index 3.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[48 + y * 2] = 0xFF;
+        ppu.vram[48 + y * 2 + 1] = 0xFF;
+    }
+
+    // Screen line 0: Window is not visible.
+    ppu.ly = 0;
+    ppu_render_scanline(&ppu, framebuffer);
+
+    assert(ppu.window_line == 0);
+
+    // Screen line 1: Window uses internal line 0.
+    ppu.ly = 1;
+    ppu_render_scanline(&ppu, framebuffer);
+
+    assert(ppu.window_line == 1);
+    assert(framebuffer[1][0] == 1);
+
+    // Screen line 2: Window uses internal line 1.
+    ppu.ly = 2;
+    ppu_render_scanline(&ppu, framebuffer);
+
+    assert(ppu.window_line == 2);
+    assert(framebuffer[2][0] == 1);
+
+    printf("PASS: Window starts at WY\n");
+    printf("PASS: Window line counter advances correctly\n");
+}
+
+void test_ppu_window_line_reset(void)
+{
+    PPU ppu;
+    BUS BUS = {0};
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    ppu.lcdc = 0x80;
+
+    // Simulate the end of a frame.
+    ppu.ly = 153;
+    ppu.dot = 455;
+    ppu.window_line = 120;
+    ppu.mode = PPU_MODE_VBLANK;
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu_update(&ppu, &BUS, 1, framebuffer);
+
+    assert(ppu.ly == 0);
+    assert(ppu.dot == 0);
+    assert(ppu.window_line == 0);
+    assert(ppu.mode == PPU_MODE_OAM);
+
+    printf("PASS: Window line counter resets at frame boundary\n");
 }
 
 void test_cpu(void) {
