@@ -8,13 +8,13 @@
 
 #include "BUS.h"
 
-uint8_t cycles = 4;
+
 
 
 static uint8_t cpu_fetch_byte(CPU *cpu, BUS *BUS) {
     uint8_t value = bus_read_byte(BUS, cpu->pc);
     cpu->pc++;
-    cpu->cycles += cycles;
+
     return value;
 }
 
@@ -192,11 +192,15 @@ static int cpu_service_interrupt(CPU *cpu, BUS *BUS) {
 }
 
 void cpu_step(CPU *cpu, BUS *BUS) {
+    uint8_t cycle = 4;
 
+    if (cpu->stopped) {
+        return;
+    }
 
 
     if (cpu_service_interrupt(cpu, BUS)) {
-        cpu->cycles += cycles;
+        cpu->cycles += 20;
         return;
     }
 
@@ -206,6 +210,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         uint8_t pending = ie & flags & 0x1F;
 
         if (pending == 0) {
+            cpu->cycles += cycle;
             return;
         }
 
@@ -228,39 +233,379 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         case 0x00: // NOP
             break;
 
+        case 0x10: // STOP
+        {
+            cpu_fetch_byte(cpu, BUS);
+            cpu->stopped = 1;
+            break;
+        }
+
+        case 0x40: //LD B, B
+        {
+            cpu->b = cpu->b;
+            break;
+        }
+
+        case 0x50: //LD D, B
+        {
+            cpu->d = cpu->b;
+            break;
+        }
+
+        case 0x60: //LD H, B
+        {
+            cpu->h = cpu->b;
+            break;
+        }
+
+        case 0x41: //LD B, C
+        {
+            cpu->b = cpu->c;
+            break;
+        }
+
+        case 0x51: //LD D, C
+        {
+            cpu->d = cpu->c;
+            break;
+        }
+
+        case 0x61: //LD H, C
+        {
+            cpu->h = cpu->c;
+            break;
+        }
+
+        case 0x02:// LD [BC], A
+        {
+            bus_write_byte(BUS, cpu_get_BC(cpu), cpu->a);
+            cycle = 8;
+            break;
+        }
+
+        case 0x12:// LD [DE], A
+        {
+            bus_write_byte(BUS, cpu_get_DE(cpu), cpu->a);
+            cycle = 8;
+            break;
+        }
+
+        case 0x42:// LD B, D
+        {
+            cpu->b = cpu->d;
+            break;
+        }
+
+        case 0x52:// LD D, D
+        {
+            cpu->d = cpu->d;
+            break;
+        }
+
+        case 0x62:// LD H, D
+        {
+            cpu->h = cpu->d;
+            break;
+        }
+
+        case 0xF2: //LDH A, [C]
+        {
+            cpu->a = bus_read_byte(BUS, 0xFF00 + cpu->c);
+            cycle = 8;
+            break;
+        }
+
+        case 0x43: //LD B, E
+        {
+            cpu->b = cpu->e;
+            break;
+        }
+
+        case 0x53: // LD D, E
+        {
+            cpu->d = cpu->e;
+            break;
+        }
+
+        case 0x63: // LD H, E
+        {
+            cpu->h = cpu->e;
+            break;
+        }
+
+        case 0x44: // LD B, H
+        {
+            cpu->b = cpu->h;
+            break;
+        }
+
+        case 0x54: // LD D, H
+        {
+            cpu->d = cpu->h;
+            break;
+        }
+
+        case 0x64: //LD H, H
+        {
+            cpu->h = cpu->h;
+            break;
+        }
+
+        case 0x45: // LD B, L
+        {
+            cpu->b = cpu->l;
+            break;
+        }
+
+        case 0x55: //LD D, L
+        {
+            cpu->d = cpu->l;
+            break;
+        }
+
+        case 0x65: // LD H, L
+        {
+            cpu->h = cpu->l;
+            break;
+        }
+
+        case 0x27: //DAA
+        {
+            uint8_t correction = 0;
+            int carry = cpu_flag_is_set(cpu, FLAG_C);
+
+            if (!cpu_flag_is_set(cpu, FLAG_N))
+            {
+                if (cpu_flag_is_set(cpu, FLAG_H) || (cpu->a & 0x0F) > 9)
+                    correction |= 0x06;
+
+                if (carry || cpu->a > 0x99)
+                {
+                    correction |= 0x60;
+                    carry = 1;
+                }
+
+                cpu->a += correction;
+            }
+            else
+            {
+                if (cpu_flag_is_set(cpu, FLAG_H))
+                    correction |= 0x06;
+
+                if (carry)
+                    correction |= 0x60;
+
+                cpu->a -= correction;
+            }
+
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, carry);
+
+            break;
+        }
+
+        case 0x37: //SCF
+        {
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, 1);
+            break;
+        }
+
+        case 0x48: // LD C, B
+        {
+            cpu->c = cpu->b;
+            break;
+        }
+
+        case 0x58: // LD E, B
+        {
+            cpu->e = cpu->b;
+            break;
+        }
+
+        case 0x68: // LD L, B
+        {
+            cpu->l = cpu->b;
+            break;
+        }
+
+        case 0x49: //LD C, C
+        {
+            cpu->c = cpu->c;
+            break;
+        }
+
+        case 0x59: //LD E, C
+        {
+            cpu->e = cpu->c;
+            break;
+        }
+
+        case 0x69: //LD L, C
+        {
+            cpu->l = cpu->c;
+            break;
+        }
+
+        case 0xE9: //JP HL
+        {
+            uint16_t address = ((uint16_t)cpu->h << 8) | cpu->l;
+            cpu->pc = address;
+            break;
+        }
+
+        case 0x0A: //LD A, [BC]
+        {
+            cpu->a = bus_read_byte(BUS, cpu_get_BC(cpu));
+            cycle = 8;
+            break;
+        }
+
+        case 0x1A: //LD A, [DE]
+        {
+            cpu->a = bus_read_byte(BUS, cpu_get_DE(cpu));
+            cycle = 8;
+            break;
+        }
+
+        case 0x4A: //LD C, D
+        {
+            cpu->c = cpu->d;
+            break;
+        }
+
+        case 0x5A: //LD E, D
+        {
+            cpu->e = cpu->d;
+            break;
+        }
+
+        case 0x6A: //LD L, D
+        {
+            cpu->l = cpu->d;
+            break;
+        }
+
+        case 0x4B: // LD C, E
+        {
+            cpu->c = cpu->e;
+            break;
+        }
+
+        case 0x5B: // LD E, E
+        {
+            cpu->e = cpu->e;
+            break;
+        }
+
+        case 0x6B: //LD L, E
+        {
+            cpu->l = cpu->e;
+            break;
+        }
+
+        case 0x4C: //LD C, H
+        {
+            cpu->c = cpu->h;
+            break;
+        }
+
+        case 0x5C: //LD E, H
+        {
+            cpu->e = cpu->h;
+            break;
+        }
+
+        case 0x6C: //LD L, H
+        {
+            cpu->l = cpu->h;
+            break;
+        }
+
+        case 0x4D: //LD C, L
+        {
+            cpu->c = cpu->l;
+            break;
+        }
+
+        case 0x5D: //LD E, L
+        {
+            cpu->e = cpu->l;
+            break;
+        }
+
+        case 0x6D: //LD L, L
+        {
+            cpu->l = cpu->l;
+            break;
+        }
+
+        case 0x2F: // CPL
+        {
+            cpu->a = ~cpu->a;
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            break;
+        }
+
+        case 0x3F: //CCF
+        {
+            int carry = cpu_flag_is_set(cpu, FLAG_C);
+            cpu_set_flag(cpu, FLAG_N, 0);
+            cpu_set_flag(cpu, FLAG_H, 0);
+            cpu_set_flag(cpu, FLAG_C, !carry);
+            break;
+        }
+
+        case 0x7F: //LD A, A
+        {
+            cpu->a = cpu->a;
+            break;
+        }
+
         case 0x3E: //LD A, d8
             uint8_t value = cpu_fetch_byte(cpu, BUS);
             cpu->a = value;
+            cycle = 8;
             break;
+
         case 0x06: //LD B, d8
             value = cpu_fetch_byte(cpu, BUS);
 
             cpu->b = value;
+            cycle = 8;
             break;
 
         case 0x0E:  //LD C, d8
             value = cpu_fetch_byte(cpu, BUS);
             cpu->c = value;
+            cycle = 8;
             break;
 
         case 0x16:  //LD D, d8
             value = cpu_fetch_byte(cpu, BUS);
             cpu->d = value;
+            cycle = 8;
             break;
 
         case 0x1E:  //LD E, d8
             value = cpu_fetch_byte(cpu, BUS);
             cpu->e = value;
+            cycle = 8;
             break;
 
         case 0x26:  //LD H, d8
             value = cpu_fetch_byte(cpu, BUS);
             cpu->h = value;
+            cycle = 8;
             break;
 
         case 0x2E:  //LD L,d8
             value = cpu_fetch_byte(cpu, BUS);
             cpu->l = value;
+            cycle = 8;
             break;
 
         case 0x47: //LD B, A // Loads A into B
@@ -313,69 +658,85 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
         case 0x7E: //LD A, (HL) // Loads byte at address HL into A
             cpu->a = bus_read_byte(BUS, cpu_get_HL(cpu));
+            cycle = 8;
             break;
 
         case 0x77: //LD (HL), A // Writes A into byte at address stored in HL
             bus_write_byte(BUS, cpu_get_HL(cpu), cpu->a);
+            cycle = 8;
             break;
 
         case 0x36: //LD (HL), d8 // Writes 8bit immediate value at address stored in HL
             value = cpu_fetch_byte(cpu, BUS);
             bus_write_byte(BUS, cpu_get_HL(cpu), value);
+            cycle = 12;
             break;
 
         case 0x46: //LD B, (HL) // Loads byte at address HL into B
             value = bus_read_byte(BUS, cpu_get_HL(cpu));
             cpu->b = value;
+            cycle = 8;
             break;
 
         case 0x4E: //LD C, (HL) // Loads byte at address HL into C
             value = bus_read_byte(BUS, cpu_get_HL(cpu));
             cpu->c = value;
+            cycle = 8;
+
             break;
 
         case 0x56: //LD D, (HL) // Loads byte at address HL into D
             value = bus_read_byte(BUS, cpu_get_HL(cpu));
             cpu->d = value;
+            cycle = 8;
             break;
 
         case 0x5E: //LD E, (HL) // Loads byte at address HL into E
             value = bus_read_byte(BUS, cpu_get_HL(cpu));
             cpu->e = value;
+            cycle = 8;
             break;
 
         case 0x66: //LD H, (HL) // Loads byte at address HL into H
             value = bus_read_byte(BUS, cpu_get_HL(cpu));
             cpu->h = value;
+            cycle = 8;
             break;
 
         case 0x6E: //LD L, (HL) // Loads byte at address HL into L
             value = bus_read_byte(BUS, cpu_get_HL(cpu));
             cpu->l = value;
+            cycle = 8;
             break;
 
         case 0x70: //LD (HL), B // Writes B into byte at address HL
             bus_write_byte(BUS, cpu_get_HL(cpu), cpu->b);
+            cycle = 8;
             break;
 
         case 0x71: //LD (HL), C // Writes C into byte at address HL
             bus_write_byte(BUS, cpu_get_HL(cpu), cpu->c);
+            cycle = 8;
             break;
 
         case 0x72: //LD (HL), D // Writes D into byte at address HL
             bus_write_byte(BUS, cpu_get_HL(cpu), cpu->d);
+            cycle = 8;
             break;
 
         case 0x73: //LD (HL), E // Writes E into byte at address HL
             bus_write_byte(BUS, cpu_get_HL(cpu), cpu->e);
+            cycle = 8;
             break;
 
         case 0x74: //LD (HL), H // Writes H into byte at address HL
             bus_write_byte(BUS, cpu_get_HL(cpu), cpu->h);
+            cycle = 8;
             break;
 
         case 0x75: //LD (HL), L // Writes L into byte at address HL
             bus_write_byte(BUS, cpu_get_HL(cpu), cpu->l);
+            cycle = 8;
             break;
 
         case 0x21: //LD HL, d16 // Load 16bit Little Endian immediate to HL
@@ -383,6 +744,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             uint8_t high = cpu_fetch_byte(cpu, BUS);
             uint16_t value_16 = ((uint16_t)high << 8 ) | low;
             cpu_set_HL(cpu, value_16);
+            cycle = 12;
             break;
 
         case 0x01: //LD BC, d16 //Load 16bit Little Endian immediate to BC
@@ -390,6 +752,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             high = cpu_fetch_byte(cpu, BUS);
             value_16 = ((uint16_t)high << 8 ) | low;
             cpu_set_BC(cpu, value_16);
+            cycle = 12;
             break;
 
         case 0x11: //LD DE, d16 //Load 16bit Little Endian immediate to DE
@@ -397,6 +760,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             high = cpu_fetch_byte(cpu, BUS);
             value_16 = ((uint16_t)high << 8 ) | low;
             cpu_set_DE(cpu, value_16);
+            cycle = 12;
             break;
 
         case 0x31: //LD SP, d16 // Load 16bit Little Endian immediate to stack pointer
@@ -404,6 +768,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             high = cpu_fetch_byte(cpu, BUS);
             value_16 = ((uint16_t)high << 8 ) | low;
             cpu->sp = value_16;
+            cycle = 12;
             break;
 
         case 0x04: // INC B // Increment B, record flags
@@ -585,13 +950,15 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             high = cpu_fetch_byte(cpu, BUS);
             value_16 = (uint16_t)high << 8 | low;
             cpu->pc = value_16;
+            cycle = 16;
             break;
 
         case 0xC2: //JP NZ, d16 // Conditional jump to immediate 16bit address if ZERO Flag is cleared
             low = cpu_fetch_byte(cpu, BUS);
             high = cpu_fetch_byte(cpu, BUS);
+            cycle = 12;
             if (cpu_flag_is_set(cpu, FLAG_Z) == 0) {
-
+                cycle = 16;
                 value_16 = (uint16_t)high << 8 | low;
                 cpu->pc = value_16;
                 break;
@@ -602,10 +969,12 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         case 0xCA: //JP Z, d16 // Conditional jump to immediate 16bit address if ZERO Flag is set
             low = cpu_fetch_byte(cpu, BUS);
             high = cpu_fetch_byte(cpu, BUS);
+            cycle = 12;
             if (cpu_flag_is_set(cpu, FLAG_Z) == 1) {
 
                 value_16 = (uint16_t)high << 8 | low;
                 cpu->pc = value_16;
+                cycle = 16;
                 break;
             } else {
                 break;
@@ -614,8 +983,9 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         case 0xD2: //JP NC, d16 // Conditional jump to immediate 16bit address if CARRY Flag is cleared
             low = cpu_fetch_byte(cpu, BUS);
             high = cpu_fetch_byte(cpu, BUS);
+            cycle = 12;
             if (cpu_flag_is_set(cpu, FLAG_C) == 0) {
-
+                cycle = 16;
                 value_16 = (uint16_t)high << 8 | low;
                 cpu->pc = value_16;
                 break;
@@ -624,11 +994,13 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             }
 
         case 0xDA: //JP C, d16 // Conditional jump to immediate 16bit address if CARRY Flag is set
+            cycle = 12;
+            low = cpu_fetch_byte(cpu, BUS);
+            high = cpu_fetch_byte(cpu, BUS);
             if (cpu_flag_is_set(cpu, FLAG_C) == 1) {
-                low = cpu_fetch_byte(cpu, BUS);
-                high = cpu_fetch_byte(cpu, BUS);
                 value_16 = (uint16_t)high << 8 | low;
                 cpu->pc = value_16;
+                cycle = 16;
                 break;
             } else {
                 break;
@@ -637,37 +1009,46 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         case 0x18: //JR, d8 // Unconditional jump to 8bit offset
             int8_t offset = (int8_t)cpu_fetch_byte(cpu, BUS);
             cpu->pc = (uint16_t)(cpu->pc + offset);
+            cycle = 12;
             break;
 
         case 0x20: //JR NZ,d8 // Conditional relative jump if ZERO FLAG is cleared
             offset = (int8_t)cpu_fetch_byte(cpu, BUS);
+            cycle = 8;
             if (cpu_flag_is_set(cpu, FLAG_Z) == 0) {
 
                 cpu->pc = (uint16_t)(cpu->pc + offset);
+                cycle = 12;
             }
             break;
 
         case 0x28: //JR Z,d8 // Conditional relative jump if ZERO FLAG is set
             offset = (int8_t)cpu_fetch_byte(cpu, BUS);
+            cycle = 8;
             if (cpu_flag_is_set(cpu, FLAG_Z) == 1) {
 
                 cpu->pc = (uint16_t)(cpu->pc + offset);
+                cycle = 12;
             }
             break;
 
         case 0x30: //JR NC,d8 // Conditional relative jump if CARRY FLAG is cleared
             offset = (int8_t)cpu_fetch_byte(cpu, BUS);
+            cycle = 8;
             if (cpu_flag_is_set(cpu, FLAG_C) == 0) {
 
                 cpu->pc = (uint16_t)(cpu->pc + offset);
+                cycle = 12;
             }
             break;
 
         case 0x38: //JR C,d8 // Conditional relative jump if CARRY FLAG is set
             offset = (int8_t)cpu_fetch_byte(cpu, BUS);
+            cycle = 8;
             if (cpu_flag_is_set(cpu, FLAG_C) == 1) {
 
                 cpu->pc = (uint16_t)(cpu->pc + offset);
+                cycle = 12;
             }
             break;
 
@@ -682,6 +1063,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
             cpu->pc = value_16;
+            cycle = 24;
             break;
 
         case 0xC9: //RET //Returns from subroutine by reading the saved return address from the stack and loading it into the program counter
@@ -691,12 +1073,15 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp++;
             value_16 = (uint16_t)high << 8 | low;
             cpu->pc = value_16;
+            cycle = 16;
+
             break;
 
         case 0xC4: // //CALL NZ d16 // Calls subroutine when ZERO FLAG is cleared, CPU saves return address to stack pointer, then jumps to target address
             low = cpu_fetch_byte(cpu, BUS);
             high = cpu_fetch_byte(cpu, BUS);
             value_16 = (uint16_t)high << 8 | low;
+            cycle = 12;
 
             if (cpu_flag_is_set(cpu, FLAG_Z) == 0) {
                 return_address = cpu->pc;
@@ -706,6 +1091,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 cpu->sp--;
                 bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
                 cpu->pc = value_16;
+                cycle = 24;
             }
             break;
 
@@ -713,7 +1099,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             low = cpu_fetch_byte(cpu, BUS);
             high = cpu_fetch_byte(cpu, BUS);
             value_16 = (uint16_t)high << 8 | low;
-
+            cycle = 12;
             if (cpu_flag_is_set(cpu, FLAG_Z) == 1) {
                 return_address = cpu->pc;
 
@@ -722,6 +1108,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 cpu->sp--;
                 bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
                 cpu->pc = value_16;
+                cycle = 24;
             }
             break;
 
@@ -729,6 +1116,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             low = cpu_fetch_byte(cpu, BUS);
             high = cpu_fetch_byte(cpu, BUS);
             value_16 = (uint16_t)high << 8 | low;
+            cycle = 12;
 
             if (cpu_flag_is_set(cpu, FLAG_C) == 0) {
                 return_address = cpu->pc;
@@ -738,6 +1126,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 cpu->sp--;
                 bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
                 cpu->pc = value_16;
+                cycle = 24;
             }
             break;
 
@@ -745,6 +1134,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             low = cpu_fetch_byte(cpu, BUS);
             high = cpu_fetch_byte(cpu, BUS);
             value_16 = (uint16_t)high << 8 | low;
+            cycle = 12;
 
             if (cpu_flag_is_set(cpu, FLAG_C) == 1) {
                 return_address = cpu->pc;
@@ -754,6 +1144,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 cpu->sp--;
                 bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
                 cpu->pc = value_16;
+                cycle = 24;
             }
             break;
 
@@ -763,6 +1154,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 >> 8));
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 & 0xFF));
+            cycle = 16;
             break;
 
         case 0xD5:// PUSH DE // Writes the 16bit value into the stack
@@ -771,6 +1163,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 >> 8));
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 & 0xFF));
+            cycle = 16;
             break;
 
         case 0xE5:// PUSH HL // Writes the 16bit value into the stack
@@ -779,6 +1172,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 >> 8));
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 & 0xFF));
+            cycle = 16;
             break;
 
         case 0xF5:// PUSH AF // Writes the 16bit value into the stack
@@ -787,6 +1181,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 >> 8));
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(value_16 & 0xFF));
+            cycle = 16;
             break;
 
         case 0xC1: //POP BC // Reverses push, restores value from the stack
@@ -796,6 +1191,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp++;
             value_16 = (uint16_t)high << 8 | low;
             cpu_set_BC(cpu,value_16);
+            cycle = 12;
             break;
 
         case 0xD1: //POP DE // Reverses push, restores value from the stack
@@ -805,6 +1201,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp++;
             value_16 = (uint16_t)high << 8 | low;
             cpu_set_DE(cpu,value_16);
+            cycle = 12;
             break;
 
         case 0xE1: //POP HL // Reverses push, restores value from the stack
@@ -814,6 +1211,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp++;
             value_16 = (uint16_t)high << 8 | low;
             cpu_set_HL(cpu,value_16);
+            cycle = 12;
             break;
 
         case 0xF1: //POP AF // Reverses push, restores value from the stack
@@ -823,9 +1221,11 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp++;
             value_16 = (uint16_t)high << 8 | low;
             cpu_set_AF(cpu,value_16);
+            cycle = 12;
             break;
 
         case 0xC0: //RET NZ //Return only if ZERO FLAG is cleared
+            cycle = 8;
             if (cpu_flag_is_set(cpu,FLAG_Z) == 0) {
                 low = bus_read_byte(BUS, cpu->sp);
                 cpu->sp++;
@@ -833,10 +1233,12 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 cpu->sp++;
                 value_16 = (uint16_t)high << 8 | low;
                 cpu->pc = value_16;
+                cycle = 20;
             }
             break;
 
         case 0xC8: //RET Z //Return only if ZERO FLAG is set
+            cycle = 8;
             if (cpu_flag_is_set(cpu,FLAG_Z) == 1) {
                 low = bus_read_byte(BUS, cpu->sp);
                 cpu->sp++;
@@ -844,10 +1246,12 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 cpu->sp++;
                 value_16 = (uint16_t)high << 8 | low;
                 cpu->pc = value_16;
+                cycle = 20;
             }
             break;
 
         case 0xD0: //RET NC //Return only if CARRY FLAG is cleared
+            cycle = 8;
             if (cpu_flag_is_set(cpu,FLAG_C) == 0) {
                 low = bus_read_byte(BUS, cpu->sp);
                 cpu->sp++;
@@ -855,10 +1259,12 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 cpu->sp++;
                 value_16 = (uint16_t)high << 8 | low;
                 cpu->pc = value_16;
+                cycle = 20;
             }
             break;
 
         case 0xD8: //RET C //Return only if ZERO FLAG is set
+            cycle = 8;
             if (cpu_flag_is_set(cpu,FLAG_C) == 1) {
                 low = bus_read_byte(BUS, cpu->sp);
                 cpu->sp++;
@@ -866,6 +1272,8 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 cpu->sp++;
                 value_16 = (uint16_t)high << 8 | low;
                 cpu->pc = value_16;
+                cycle = 20;
+
             }
             break;
 
@@ -877,6 +1285,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             value_16 = (uint16_t)high << 8 | low;
             cpu->pc = value_16;
             cpu->ime = 1;
+            cycle = 16;
             break;
 
         case 0xC7: //RST 00H // Jumps to 0x0000 and pushes the return address to the stack
@@ -887,6 +1296,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
             cpu->pc = 0x0000;
+            cycle = 16;
             break;
 
         case 0xCF: //RST 08H // Jumps to 0x0008 and pushes the return address to the stack
@@ -897,6 +1307,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
             cpu->pc = 0x0008;
+            cycle = 16;
             break;
 
         case 0xD7: //RST 10H // Jumps to 0x0010 and pushes the return address to the stack
@@ -907,6 +1318,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
             cpu->pc = 0x0010;
+            cycle = 16;
             break;
 
         case 0xDF: //RST 18H // Jumps to 0x0018 and pushes the return address to the stack
@@ -927,6 +1339,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
             cpu->pc = 0x0020;
+            cycle = 16;
             break;
 
         case 0xEF: //RST 28H // Jumps to 0x0028 and pushes the return address to the stack
@@ -937,6 +1350,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
             cpu->pc = 0x0028;
+            cycle = 16;
             break;
 
         case 0xF7: //RST 30H // Jumps to 0x0030 and pushes the return address to the stack
@@ -947,6 +1361,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
             cpu->pc = 0x0030;
+            cycle = 16;
             break;
 
         case 0xFF: //RST 38H // Jumps to 0x0030 and pushes the return address to the stack
@@ -957,6 +1372,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
             cpu->pc = 0x0038;
+            cycle = 16;
             break;
 
         case 0x08: //LD (d16), SP writes to memory the stack pointer
@@ -966,54 +1382,63 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             uint16_t sp = cpu->sp;
             bus_write_byte(BUS,value_16, (uint8_t)(sp & 0xFF));
             bus_write_byte(BUS,value_16 + 1, (uint8_t)(sp >> 8));
+            cycle = 20;
             break;
 
         case 0x03: //INC BC, Increment BC
             value_16 = cpu_get_BC(cpu);
             value_16++;
             cpu_set_BC(cpu,value_16);
+            cycle = 8;
             break;
 
         case 0x13: //INC DE, Increment DE
             value_16 = cpu_get_DE(cpu);
             value_16++;
             cpu_set_DE(cpu,value_16);
+            cycle = 8;
             break;
 
         case 0x23: //INC HL, Increment HL
             value_16 = cpu_get_HL(cpu);
             value_16++;
             cpu_set_HL(cpu,value_16);
+            cycle = 8;
             break;
 
         case 0x33: //INC SP, Increment Stack Pointer
             value_16 = cpu->sp;
             value_16++;
             cpu->sp = value_16;
+            cycle = 8;
             break;
 
         case 0x0B: //DEC BC, Decrement BC
             value_16 = cpu_get_BC(cpu);
             value_16--;
             cpu_set_BC(cpu,value_16);
+            cycle = 8;
             break;
 
         case 0x1B: //DEC DE, Decrement DE
             value_16 = cpu_get_DE(cpu);
             value_16--;
             cpu_set_DE(cpu,value_16);
+            cycle = 8;
             break;
 
         case 0x2B: //DEC HL, Decrement HL
             value_16 = cpu_get_HL(cpu);
             value_16--;
             cpu_set_HL(cpu,value_16);
+            cycle = 8;
             break;
 
         case 0x3B: //DEC SP, Decrement Stack Pointer
             value_16 = cpu->sp;
             value_16--;
             cpu->sp = value_16;
+            cycle = 8;
             break;
 
         case 0x09: // ADD HL,BC //add BC to HL, store in HL
@@ -1025,6 +1450,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H,((hl & 0x0FFF) + (bc & 0x0FFF)) > 0x0FFF);
             cpu_set_flag(cpu, FLAG_C, result_32 > 0xFFFF);
+            cycle = 8;
             break;
 
         case 0x19: // ADD HL,DE //add DE to HL, store in HL
@@ -1036,6 +1462,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H,((hl & 0x0FFF) + (de & 0x0FFF)) > 0x0FFF);
             cpu_set_flag(cpu, FLAG_C, result_32 > 0xFFFF);
+            cycle = 8;
             break;
 
         case 0x29: // ADD HL,HL //add HL to HL, store in HL
@@ -1047,6 +1474,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H,((hl & 0x0FFF) + (hl & 0x0FFF)) > 0x0FFF);
             cpu_set_flag(cpu, FLAG_C, result_32 > 0xFFFF);
+            cycle = 8;
             break;
 
         case 0x39: // ADD HL,SP //add the Stack Pointer to HL, store in HL
@@ -1058,6 +1486,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H,((hl & 0x0FFF) + (sp                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           & 0x0FFF)) > 0x0FFF);
             cpu_set_flag(cpu, FLAG_C, result_32 > 0xFFFF);
+            cycle = 8;
             break;
 
         case 0xE8: //ADD SP, d8// add signed 8bit offset to SP, store in SP
@@ -1070,6 +1499,8 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((sp & 0x0F) + (value & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, ((sp & 0xFF) + value) > 0xFF);
+            cycle = 16;
+
             break;
 
         case 0xF8: //LD HL, SP+d8 // sum sp and 8bit s_offset, store in HL
@@ -1082,11 +1513,13 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((sp & 0x0F) + (value & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, ((sp & 0xFF) + value) > 0xFF);
+            cycle = 12;
             break;
 
         case 0xF9: //LD SP,HL // LOAD HL into the Stack Pointer
             value_16 = cpu_get_HL(cpu);
             cpu->sp = value_16;
+            cycle = 8;
             break;
 
         case 0xE0: //LDH (a8), A writes A into HRAM
@@ -1094,6 +1527,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             uint16_t address = 0xFF00 + value;
             a = cpu->a;
             bus_write_byte(BUS, address, a);
+            cycle = 12;
             break;
 
         case 0xF0: //LDH A, (a8) //Writes HRAM byte into A
@@ -1101,12 +1535,14 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             address = 0xFF00 + value;
             a = bus_read_byte(BUS, address);
             cpu->a = a;
+            cycle = 12;
             break;
 
         case 0xE2: //LD (C), A //writes register A to the address 0xFF00 + C, using register C as the 8-bit offset.
             address = 0xFF00 + cpu->c;
             a = cpu->a;
             bus_write_byte(BUS, address, a);
+            cycle = 8;
             break;
 
         case 0xEA: //LD (a16), A//write register A to a 16-bit memory address.
@@ -1115,6 +1551,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             address = ((uint16_t)high << 8) | low;
             a = cpu->a;
             bus_write_byte(BUS, address, a);
+            cycle = 16;
             break;
 
         case 0xFA://LD A, (a16) // Load byte at address into A
@@ -1123,6 +1560,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             high = cpu_fetch_byte(cpu, BUS);
             address = ((uint16_t)high << 8) | low;
             cpu->a = bus_read_byte(BUS, address);
+            cycle = 16;
             break;
         }
         case 0x32: //LD (HL-), A // writes A into byte at the address in HL, then decrements HL
@@ -1131,6 +1569,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             a = cpu->a;
             bus_write_byte(BUS, address, a);
             cpu_set_HL(cpu, address - 1);
+            cycle = 8;
             break;
         }
         case 0x3A: //LD A, (HL-) // writes byte at address HL into A, then decrements HL
@@ -1138,6 +1577,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             address = cpu_get_HL(cpu);
             cpu->a = bus_read_byte(BUS, address);
             cpu_set_HL(cpu, address - 1);
+            cycle = 8;
             break;
         }
         case 0x22: //LD (HL+), A // writes A into byte at the address in HL, then increments HL
@@ -1146,6 +1586,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             a = cpu->a;
             bus_write_byte(BUS, address, a);
             cpu_set_HL(cpu, address + 1);
+            cycle = 8;
             break;
         }
         case 0x2A: //LD A, (HL+) // writes byte at address HL into A, then increments HL
@@ -1153,6 +1594,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             address = cpu_get_HL(cpu);
             cpu->a = bus_read_byte(BUS, address);
             cpu_set_HL(cpu, address + 1);
+            cycle = 8;
             break;
         }
         case 0x14: //INC D
@@ -1280,6 +1722,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_Z, result == 0);
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, (result & 0x0F) == 0);
+            cycle = 12;
 
             break;
         }
@@ -1294,7 +1737,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_Z, result == 0);
             cpu_set_flag(cpu, FLAG_N, 1);
             cpu_set_flag(cpu, FLAG_H, (value & 0x0F) == 0);
-
+            cycle = 12;
             break;
         }
 
@@ -1454,6 +1897,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_H,
                          (a & 0x0F) < ((value & 0x0F) + carry));
             cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+            cycle = 8;
             break;
         }
 
@@ -1551,6 +1995,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (value & 0x0F) + carry) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            cycle = 8;
 
             break;
         }
@@ -1638,6 +2083,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (value & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            cycle = 8;
             break;
         }
 
@@ -1721,6 +2167,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 1);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) < (value & 0x0F)));
             cpu_set_flag(cpu, FLAG_C, a < value);
+            cycle = 8;
             break;
         }
 
@@ -1804,6 +2251,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, 1);
             cpu_set_flag(cpu, FLAG_C, 0);
+            cycle = 8;
             break;
         }
 
@@ -1888,6 +2336,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, 0);
             cpu_set_flag(cpu, FLAG_C, 0);
+            cycle = 8;
             break;
         }
 
@@ -1971,6 +2420,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, 0);
             cpu_set_flag(cpu, FLAG_C, 0);
+            cycle = 8;
             break;
         }
 
@@ -2044,6 +2494,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 1);
             cpu_set_flag(cpu, FLAG_H, (a & 0x0F) < (value & 0x0F));
             cpu_set_flag(cpu, FLAG_C, a < value);
+            cycle = 8;
             break;
         }
 
@@ -2069,6 +2520,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (value & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            cycle = 8;
             break;
         }
 
@@ -2084,6 +2536,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H,((a & 0x0F) + (value & 0x0F) + carry) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
+            cycle = 8;
 
             break;
         }
@@ -2099,6 +2552,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 1);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) < (value & 0x0F)));
             cpu_set_flag(cpu, FLAG_C, a < value);
+            cycle = 8;
             break;
         }
 
@@ -2117,6 +2571,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_H,
                          (a & 0x0F) < ((value & 0x0F) + carry));
             cpu_set_flag(cpu, FLAG_C, sresult_16 < 0);
+            cycle = 8;
             break;
         }
 
@@ -2131,6 +2586,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, 1);
             cpu_set_flag(cpu, FLAG_C, 0);
+            cycle = 8;
             break;
         }
 
@@ -2145,6 +2601,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, 0);
             cpu_set_flag(cpu, FLAG_C, 0);
+            cycle = 8;
             break;
         }
 
@@ -2159,6 +2616,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, 0);
             cpu_set_flag(cpu, FLAG_C, 0);
+            cycle = 8;
             break;
         }
 
@@ -2171,6 +2629,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_set_flag(cpu, FLAG_N, 1);
             cpu_set_flag(cpu, FLAG_H, (a & 0x0F) < (value & 0x0F));
             cpu_set_flag(cpu, FLAG_C, a < value);
+            cycle = 8;
             break;
         }
 
@@ -2231,6 +2690,18 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         {
             uint8_t cb_opcode = cpu_fetch_byte(cpu, BUS);
             cpu_execute_cb(cpu, BUS, cb_opcode);
+
+
+            uint8_t target = cb_opcode & 0x07;
+            uint8_t group = cb_opcode >> 6;
+
+            if (target == 6) {
+                cycle = (group == 1) ? 12 : 16;
+            } else {
+                cycle = 8;
+            }
+
+
             break;
         }
 
@@ -2247,6 +2718,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         }
 
         case 0x76: //HALT
+        {
             uint8_t ie = bus_read_byte(BUS, 0xFFFF);
             uint8_t flags = bus_read_byte(BUS, 0xFF0F);
             uint8_t pending = ie & flags & 0x1F;
@@ -2257,14 +2729,20 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 cpu->halted = 1;
             }
             break;
+        }
 
-        case 0x12:
 
         default:
+            printf("Unknown opcode: 0x%02X at PC: %04X\n", opcode, cpu->pc - 1);
             break;
     }
 
 
+
+    cpu->cycles += cycle;
+
+
     (void)opcode;
 }
+
 

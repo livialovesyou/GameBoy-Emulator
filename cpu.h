@@ -29,6 +29,8 @@ typedef struct {
         uint8_t halted; //Halt
         uint8_t halt_bug;
 
+        uint8_t stopped; //STOP
+
 
 } CPU;
 
@@ -53,6 +55,7 @@ static inline void cpu_set_DE(CPU *cpu, uint16_t value) {
 //Read/Write HL
 static inline uint16_t cpu_get_HL(const CPU *cpu) {
         return ((uint16_t)cpu->h << 8 ) | cpu->l;
+
 }
 static inline void cpu_set_HL(CPU *cpu, uint16_t value) {
         cpu->h = (uint8_t)(value >> 8) & 0xFF;
