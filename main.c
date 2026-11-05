@@ -5,7 +5,7 @@
 #include "cpu.h"
 #include "ppu.h"
 #include "bmp.h"
-
+#include "timer.h"
 
 
 int main(void) {
@@ -13,10 +13,16 @@ int main(void) {
     //Initialize CPU, BUS and PPU
     CPU cpu = {0};
     BUS BUS = {0};
-    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+    TIMER timer;
     PPU ppu;
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
     ppu_init(&ppu);
+    timer_init(&timer);
+
     BUS.ppu = &ppu;
+    BUS.timer = &timer;
+
     bool running = true;
 
     while (running) {
@@ -29,6 +35,7 @@ int main(void) {
 
         bus_update_dma(&BUS, elapsed);
         ppu_update(&ppu, &BUS, elapsed, framebuffer);
+        timer_update(&timer, elapsed, &BUS.interrupt_flags);
     }
 
     for (int y = 0; y < SCREEN_HEIGHT; y++) {

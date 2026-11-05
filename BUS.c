@@ -7,10 +7,19 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include "timer.h"
 
 
 static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
     switch (address) {
+
+        //timer regs
+        case 0xFF04:
+        case 0xFF05:
+        case 0xFF06:
+        case 0xFF07:
+            return timer_read_register(BUS->timer, address);
+
         case 0xFF40: // LCDC
         case 0xFF41: // STAT
         case 0xFF42: // SCY
@@ -22,6 +31,8 @@ static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
         case 0xFF4B: // WX
             return ppu_read_register(BUS->ppu, address);
     }
+
+
 
 
     // VRAM: 0x8000–0x9FFF
@@ -99,6 +110,14 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
     }
 
     switch (address) {
+
+        //timer regs
+        case 0xFF04:
+        case 0xFF05:
+        case 0xFF06:
+        case 0xFF07:
+            timer_write_register(BUS->timer, address, value);
+            break;
 
         case 0xFF46: {
             BUS->dma_active = 1;

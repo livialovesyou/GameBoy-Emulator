@@ -12,6 +12,10 @@ add_executable(GB_Emulator main.c
         cpu.h
         ppu.c
         ppu.h
+        timer.c
+        timer.h
         bmp.c
         bmp.h
+        timer.c
+        timer.h
 )

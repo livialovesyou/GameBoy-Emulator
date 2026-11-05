@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include "ppu.h"
 
+typedef struct TIMER TIMER;
+
 typedef struct BUS {
 
     uint8_t wram[WRAM_SIZE];
@@ -17,6 +19,7 @@ typedef struct BUS {
     uint8_t interrupt_flags;  // IF: 0xFF0F
 
     PPU *ppu;
+    TIMER *timer;
 
     uint8_t dma_active;
     uint16_t dma_source;
