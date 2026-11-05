@@ -2874,72 +2874,43 @@ void test_ppu_HBlank_transition(void) {
     uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
 
     ppu_init(&ppu);
-
-    // Connect the PPU to the bus if your bus requires it.
     BUS.ppu = &ppu;
 
-    // Enable LCD, background, and unsigned tile addressing.
     ppu.lcdc = 0x91;
     ppu.lcd_was_enabled = 1;
-
-    // Identity palette.
     ppu.bgp = 0xE4;
 
-    // Make tile 0's first row color index 1.
-    ppu.vram[0] = 0xFF;
-    ppu.vram[1] = 0x00;
+    // Tile 0: every pixel has color index 1.
+    for (int i = 0; i < 16; i += 2)
+    {
+        ppu.vram[i] = 0xFF;
+        ppu.vram[i + 1] = 0x00;
+    }
 
-    // Initialize framebuffer with recognizable values.
     memset(framebuffer, 0xFF, sizeof(framebuffer));
 
-    // Set PPU just before the HBlank transition.
     ppu.ly = 0;
-    ppu.dot = 248;
+    ppu.dot = 80;
     ppu.mode = PPU_MODE_DRAWING;
     ppu.previous_mode = PPU_MODE_DRAWING;
 
-    // Advance four dots.
-    ppu_update(&ppu, &BUS, 4, framebuffer);
+    ppu_start_drawing(&ppu);
 
-    // Check PPU state.
-    if (ppu.ly != 0)
+    // Advance until the FIFO outputs all 160 pixels.
+    for (int i = 0; i < 300 && ppu.mode == PPU_MODE_DRAWING; i++)
     {
-        printf("FAIL: LY = %u, expected 0\n", ppu.ly);
+        ppu_update(&ppu, &BUS, 1, framebuffer);
     }
 
-    if (ppu.dot != 252)
-    {
-        printf("FAIL: Dot = %u, expected 252\n", ppu.dot);
-    }
+    assert(ppu.mode == PPU_MODE_HBLANK);
+    assert(ppu.output_x == SCREEN_WIDTH);
 
-    if (ppu.mode != PPU_MODE_HBLANK)
-    {
-        printf("FAIL: Mode = %u, expected HBlank (0)\n", ppu.mode);
-    }
+    assert(framebuffer[0][0] == 1);
+    assert(framebuffer[0][159] == 1);
 
-    // Check that the first pixel was rendered.
-    if (framebuffer[0][0] != 1)
-    {
-        printf("FAIL: Pixel = %u, expected 1\n",
-               framebuffer[0][0]);
-    }
+    assert(framebuffer[1][0] == 0xFF);
 
-    // Check that the final pixel was rendered.
-    if (framebuffer[0][159] != 1)
-    {
-        printf("FAIL: Pixel = %u, expected 1\n",
-               framebuffer[0][159]);
-    }
-
-    // Check that the next scanline was not modified.
-    if (framebuffer[1][0] != 0xFF)
-    {
-        printf("FAIL: Scanline 1 was modified\n");
-    }
-
-    printf("PASS: HBlank transition detected\n");
-    printf("PASS: Scanline 0 rendered\n");
-    printf("PASS: Scanline 1 unchanged\n");
+    printf("PASS: FIFO completes scanline and enters HBlank\n");
 }
 
 void test_ppu_scanline_crossing(void) {
@@ -4959,6 +4930,284 @@ void test_ppu_output_pixel(void) {
     assert(ppu.bg_fifo.count == 0);
 }
 
+void test_ppu_scx_scroll(void)
+{
+    const uint8_t scx_values[] = {0, 5, 8, 255};
+    const uint8_t expected_pixels[] = {1, 1, 2, 3};
+
+    for (int test = 0; test < 4; test++)
+    {
+        PPU ppu;
+        BUS BUS = {0};
+
+        uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+        ppu_init(&ppu);
+        BUS.ppu = &ppu;
+
+        ppu.lcdc = 0x91;
+        ppu.lcd_was_enabled = 1;
+        ppu.bgp = 0xE4;
+        ppu.scx = scx_values[test];
+
+        // Fill the background tile map with tile IDs 0-31.
+        for (int x = 0; x < 32; x++)
+        {
+            ppu.vram[0x1800 + x] = x;
+        }
+
+        // Tile 0: color index 1.
+        // Tile 1: color index 2.
+        // Tile 31: color index 3.
+        for (int row = 0; row < 8; row++)
+        {
+            ppu.vram[0x0000 + row * 2] = 0xFF;
+            ppu.vram[0x0000 + row * 2 + 1] = 0x00;
+
+            ppu.vram[0x0010 + row * 2] = 0x00;
+            ppu.vram[0x0010 + row * 2 + 1] = 0xFF;
+
+            ppu.vram[0x01F0 + row * 2] = 0xFF;
+            ppu.vram[0x01F0 + row * 2 + 1] = 0xFF;
+        }
+
+        memset(framebuffer, 0xFF, sizeof(framebuffer));
+
+        ppu.ly = 0;
+        ppu.dot = 80;
+        ppu.mode = PPU_MODE_DRAWING;
+
+        ppu_start_drawing(&ppu);
+
+        // Run until all visible pixels have been output.
+        for (int i = 0; i < 300 && ppu.mode == PPU_MODE_DRAWING; i++)
+        {
+            ppu_update(&ppu, &BUS, 1, framebuffer);
+        }
+
+        assert(ppu.mode == PPU_MODE_HBLANK);
+        assert(ppu.output_x == SCREEN_WIDTH);
+        assert(framebuffer[0][0] == expected_pixels[test]);
+
+        printf("PASS: SCX = %u\n", scx_values[test]);
+    }
+}
+
+void test_ppu_window_fifo(void)
+{
+    PPU ppu;
+    BUS BUS = {0};
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    // LCD, background, unsigned tile data, and window enabled.
+    ppu.lcdc = 0xF1;
+    ppu.lcd_was_enabled = 1;
+
+    ppu.bgp = 0xE4;
+    ppu.scx = 0;
+
+    ppu.wx = 47;  // Window starts at screen X = 40.
+    ppu.wy = 0;
+
+    // Background map uses tile 0.
+    // Window map uses tile 1.
+    memset(&ppu.vram[0x1800], 0, 32 * 32);
+    memset(&ppu.vram[0x1C00], 1, 32 * 32);
+
+    // Tile 0: color index 1.
+    // Tile 1: color index 2.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[row * 2] = 0xFF;
+        ppu.vram[row * 2 + 1] = 0x00;
+
+        ppu.vram[16 + row * 2] = 0x00;
+        ppu.vram[16 + row * 2 + 1] = 0xFF;
+    }
+
+    memset(framebuffer, 0xFF, sizeof(framebuffer));
+
+    ppu.ly = 0;
+    ppu.dot = 80;
+    ppu.mode = PPU_MODE_DRAWING;
+
+    ppu_start_drawing(&ppu);
+
+    for (int i = 0; i < 300 && ppu.mode == PPU_MODE_DRAWING; i++)
+    {
+        ppu_update(&ppu, &BUS, 1, framebuffer);
+    }
+
+    assert(ppu.mode == PPU_MODE_HBLANK);
+    assert(ppu.output_x == SCREEN_WIDTH);
+
+    // Background before the window.
+    assert(framebuffer[0][0] == 1);
+    assert(framebuffer[0][39] == 1);
+
+    // Window begins at X = WX - 7 = 40.
+    assert(framebuffer[0][40] == 2);
+    assert(framebuffer[0][41] == 2);
+
+    printf("PASS: Window FIFO rendering\n");
+}
+
+void test_ppu_window_line_counter(void)
+{
+    PPU ppu;
+    BUS BUS = {0};
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    ppu.lcdc = 0xF1;
+    ppu.lcd_was_enabled = 1;
+    ppu.bgp = 0xE4;
+
+    ppu.wx = 7;  // Window starts at X = 0.
+    ppu.wy = 0;
+
+    // Background map uses tile 0.
+    memset(&ppu.vram[0x1800], 0, 32 * 32);
+
+    // Window map uses tile 1.
+    memset(&ppu.vram[0x1C00], 1, 32 * 32);
+
+    // Tile 0: color index 1 on every row.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[row * 2] = 0xFF;
+        ppu.vram[row * 2 + 1] = 0x00;
+    }
+
+    // Tile 1: color index 2 on row 0, color index 3 on row 1.
+    ppu.vram[16] = 0x00;
+    ppu.vram[17] = 0xFF;
+
+    ppu.vram[18] = 0xFF;
+    ppu.vram[19] = 0xFF;
+
+    memset(framebuffer, 0xFF, sizeof(framebuffer));
+
+    // Start at the beginning of Mode 2.
+    ppu.ly = 0;
+    ppu.dot = 0;
+    ppu.mode = PPU_MODE_OAM;
+
+    // Advance through two scanlines.
+    for (int i = 0; i < 456 * 2; i++)
+    {
+        ppu_update(&ppu, &BUS, 1, framebuffer);
+    }
+
+    // First scanline uses window row 0: color index 2.
+    assert(framebuffer[0][0] == 2);
+
+    // Second scanline uses window row 1: color index 3.
+    assert(framebuffer[1][0] == 3);
+
+    assert(ppu.window_line == 2);
+
+    printf("PASS: Window line counter\n");
+}
+
+void test_ppu_window_visibility_limits(void)
+{
+    PPU ppu;
+    BUS BUS = {0};
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    ppu.lcdc = 0xF1;
+    ppu.lcd_was_enabled = 1;
+    ppu.bgp = 0xE4;
+
+    // Background tile map uses tile 0.
+    // Window tile map uses tile 1.
+    memset(&ppu.vram[0x1800], 0, 32 * 32);
+    memset(&ppu.vram[0x1C00], 1, 32 * 32);
+
+    // Tile 0: color index 1.
+    // Tile 1: color index 2.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[row * 2] = 0xFF;
+        ppu.vram[row * 2 + 1] = 0x00;
+
+        ppu.vram[16 + row * 2] = 0x00;
+        ppu.vram[16 + row * 2 + 1] = 0xFF;
+    }
+
+    // Case 1: WX = 167 means the window starts off-screen.
+    ppu.wx = 167;
+    ppu.wy = 0;
+
+    memset(framebuffer, 0xFF, sizeof(framebuffer));
+
+    ppu.ly = 0;
+    ppu.dot = 80;
+    ppu.mode = PPU_MODE_DRAWING;
+    ppu_start_drawing(&ppu);
+
+    for (int i = 0; i < 300 && ppu.mode == PPU_MODE_DRAWING; i++)
+        ppu_update(&ppu, &BUS, 1, framebuffer);
+
+    printf("Pixel: %u\n", framebuffer[0][0]);
+    printf("Window active: %u\n", ppu.window_active);
+    printf("Window line: %u\n", ppu.window_line);
+    printf("Mode: %u\n", ppu.mode);
+
+    assert(framebuffer[0][0] == 1);
+    assert(ppu.window_line == 0);
+
+    // Case 2: Window starts below the current scanline.
+    ppu_init(&ppu);
+    memset(&ppu.vram[0x1800], 0, 32 * 32);
+
+    // Tile 0: color index 1.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[row * 2] = 0xFF;
+        ppu.vram[row * 2 + 1] = 0x00;
+    }
+    
+    BUS.ppu = &ppu;
+
+    ppu.lcdc = 0xF1;
+    ppu.lcd_was_enabled = 1;
+    ppu.bgp = 0xE4;
+    ppu.wx = 7;
+    ppu.wy = 1;
+
+    memset(framebuffer, 0xFF, sizeof(framebuffer));
+
+    ppu.ly = 0;
+    ppu.dot = 80;
+    ppu.mode = PPU_MODE_DRAWING;
+    ppu_start_drawing(&ppu);
+
+    for (int i = 0; i < 300 && ppu.mode == PPU_MODE_DRAWING; i++)
+        ppu_update(&ppu, &BUS, 1, framebuffer);
+
+    printf("Pixel: %u\n", framebuffer[0][0]);
+    printf("Window active: %u\n", ppu.window_active);
+    printf("Window line: %u\n", ppu.window_line);
+    printf("Mode: %u\n", ppu.mode);
+
+    assert(framebuffer[0][0] == 1);
+    assert(ppu.window_line == 0);
+
+    printf("PASS: Window visibility limits\n");
+}
+
 void test_cpu(void) {
     test_cpu_registers_1();
     test_cpu_flags_1();
@@ -5018,7 +5267,11 @@ void test_ppu(void) {
     test_ppu_fifo();
     test_ppu_fetcher();
     test_ppu_fetcher_multiple_tiles();
-    test_ppu_output_pixel;
+    test_ppu_output_pixel();
+    test_ppu_scx_scroll();
+    test_ppu_window_fifo();
+    test_ppu_window_line_counter();
+    test_ppu_window_visibility_limits();
 
 }
 

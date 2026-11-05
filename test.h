@@ -69,6 +69,10 @@ void test_ppu_fifo(void);
 void test_ppu_fetcher(void);
 void test_ppu_fetcher_multiple_tiles(void);
 void test_ppu_output_pixel(void);
+void test_ppu_scx_scroll(void);
+void test_ppu_window_fifo(void);
+void test_ppu_window_line_counter(void);
+void test_ppu_window_visibility_limits(void);
 
 
 void test_timer_div(void);

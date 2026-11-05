@@ -208,13 +208,118 @@ void ppu_write_register(PPU *ppu, uint16_t address, uint8_t value) {
 //     ppu_request_stat_interrupt(ppu, BUS);
 // }
 
+// void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
+//                 uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH])
+// {
+//
+//     int lcd_enabled = (ppu->lcdc & 0x80) != 0;
+//
+//     // LCD was just disabled.
+//     if (!lcd_enabled)
+//     {
+//         ppu->ly = 0;
+//         ppu->dot = 0;
+//         ppu->mode = PPU_MODE_HBLANK;
+//         ppu->window_line = 0;
+//         ppu->stat_irq_line = 0;
+//         ppu->lcd_was_enabled = 0;
+//         ppu_update_stat(ppu);
+//         return;
+//     }
+//
+//     // LCD was just enabled.
+//     if (!ppu->lcd_was_enabled) {
+//         ppu->ly = 0;
+//         ppu->dot = 0;
+//         ppu->mode = PPU_MODE_OAM;
+//         ppu->window_line = 0;
+//         ppu->stat_irq_line = 0;
+//         ppu->lcd_was_enabled = 1;
+//
+//         ppu_update_stat(ppu);
+//         ppu_request_stat_interrupt(ppu, BUS);
+//     }
+//
+//     while (cycles > 0)
+//     {
+//         uint16_t boundary;
+//
+//         // Determine the next boundary.
+//         if (ppu->ly >= 144)
+//         {
+//             boundary = 456;
+//         }
+//         else if (ppu->dot < 80)
+//         {
+//             boundary = 80;
+//         }
+//         else if (ppu->dot < 252)
+//         {
+//             boundary = 252;
+//         }
+//         else
+//         {
+//             boundary = 456;
+//         }
+//
+//         // Calculate how many dots remain until the boundary.
+//         uint16_t dots_remaining = boundary - ppu->dot;
+//
+//         // Advance only as far as the boundary or remaining cycles.
+//         uint16_t step = cycles < dots_remaining
+//                       ? (uint16_t)cycles
+//                       : dots_remaining;
+//
+//         ppu->dot += step;
+//         cycles -= step;
+//
+//         // Check whether we reached a boundary.
+//         if (ppu->dot == boundary)
+//         {
+//             if (boundary == 80)
+//             {
+//                 ppu->mode = PPU_MODE_DRAWING;
+//             }
+//             else if (boundary == 252)
+//             {
+//                 ppu->mode = PPU_MODE_HBLANK;
+//
+//
+//                 // Render the completed scanline.
+//                 ppu_render_scanline(ppu, framebuffer);
+//             }
+//             else if (boundary == 456)
+//             {
+//                 ppu->dot = 0;
+//                 ppu->ly++;
+//
+//                 if (ppu->ly == 144)
+//                     BUS->interrupt_flags |= INT_VBLANK;
+//
+//                 if (ppu->ly >= 154) {
+//                     ppu->ly = 0;
+//                     ppu->window_line = 0;
+//                 }
+//
+//                 if (ppu->ly >= 144)
+//                     ppu->mode = PPU_MODE_VBLANK;
+//                 else
+//                     ppu->mode = PPU_MODE_OAM;
+//             }
+//         }
+//
+//         // Refresh STAT after each transition or partial advance.
+//         ppu_update_stat(ppu);
+//         ppu_request_stat_interrupt(ppu, BUS);
+//     }
+// }
+
 void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
                 uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH])
 {
-
     int lcd_enabled = (ppu->lcdc & 0x80) != 0;
 
-    // LCD was just disabled.
+    // LCD is disabled.
     if (!lcd_enabled)
     {
         ppu->ly = 0;
@@ -228,7 +333,8 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
     }
 
     // LCD was just enabled.
-    if (!ppu->lcd_was_enabled) {
+    if (!ppu->lcd_was_enabled)
+    {
         ppu->ly = 0;
         ppu->dot = 0;
         ppu->mode = PPU_MODE_OAM;
@@ -242,73 +348,59 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
 
     while (cycles > 0)
     {
-        uint16_t boundary;
-
-        // Determine the next boundary.
-        if (ppu->ly >= 144)
+        // Process one dot at a time during Mode 3.
+        if (ppu->mode == PPU_MODE_DRAWING)
         {
-            boundary = 456;
-        }
-        else if (ppu->dot < 80)
-        {
-            boundary = 80;
-        }
-        else if (ppu->dot < 252)
-        {
-            boundary = 252;
-        }
-        else
-        {
-            boundary = 456;
-        }
+            ppu_check_window_start(ppu);
+            ppu_fetcher_update(ppu);
+            ppu_output_pixel(ppu, framebuffer);
 
-        // Calculate how many dots remain until the boundary.
-        uint16_t dots_remaining = boundary - ppu->dot;
-
-        // Advance only as far as the boundary or remaining cycles.
-        uint16_t step = cycles < dots_remaining
-                      ? (uint16_t)cycles
-                      : dots_remaining;
-
-        ppu->dot += step;
-        cycles -= step;
-
-        // Check whether we reached a boundary.
-        if (ppu->dot == boundary)
-        {
-            if (boundary == 80)
-            {
-                ppu->mode = PPU_MODE_DRAWING;
-            }
-            else if (boundary == 252)
+            if (ppu->output_x >= SCREEN_WIDTH)
             {
                 ppu->mode = PPU_MODE_HBLANK;
-                ppu_start_drawing(ppu);
-
-                // Render the completed scanline.
-                ppu_render_scanline(ppu, framebuffer);
-            }
-            else if (boundary == 456)
-            {
-                ppu->dot = 0;
-                ppu->ly++;
-
-                if (ppu->ly == 144)
-                    BUS->interrupt_flags |= INT_VBLANK;
-
-                if (ppu->ly >= 154) {
-                    ppu->ly = 0;
-                    ppu->window_line = 0;
-                }
-
-                if (ppu->ly >= 144)
-                    ppu->mode = PPU_MODE_VBLANK;
-                else
-                    ppu->mode = PPU_MODE_OAM;
             }
         }
 
-        // Refresh STAT after each transition or partial advance.
+        ppu->dot++;
+        cycles--;
+
+        // End of a scanline.
+        if (ppu->dot >= 456)
+        {
+            ppu->dot = 0;
+            if (ppu->ly < 144 && ppu->window_active)
+            {
+                ppu->window_line++;
+            }
+            ppu->ly++;
+
+            if (ppu->ly == 144)
+            {
+                BUS->interrupt_flags |= INT_VBLANK;
+            }
+
+            if (ppu->ly >= 154)
+            {
+                ppu->ly = 0;
+                ppu->window_line = 0;
+            }
+
+            if (ppu->ly >= 144)
+            {
+                ppu->mode = PPU_MODE_VBLANK;
+            }
+            else
+            {
+                ppu->mode = PPU_MODE_OAM;
+            }
+        }
+        // End of OAM scan.
+        else if (ppu->ly < 144 && ppu->dot == 80)
+        {
+            ppu->mode = PPU_MODE_DRAWING;
+            ppu_start_drawing(ppu);
+        }
+
         ppu_update_stat(ppu);
         ppu_request_stat_interrupt(ppu, BUS);
     }
@@ -798,9 +890,31 @@ void ppu_fetcher_update(PPU *ppu) {
 
     switch (ppu->fetcher_step) {
         case 0: {
-            uint16_t tile_map_address = (ppu->lcdc & 0x08) ? 0x9C00 : 0x9800;
-            uint8_t tile_x = ppu->fetcher_x & 31;
-            uint8_t tile_y = ((ppu->ly + ppu->scy) / 8) & 31;
+
+            uint16_t tile_map_address;
+
+            if (ppu->window_active)
+            {
+                tile_map_address = (ppu->lcdc & 0x40) ? 0x9C00 : 0x9800;
+            }
+            else
+            {
+                tile_map_address = (ppu->lcdc & 0x08) ? 0x9C00 : 0x9800;
+            }
+
+            uint8_t tile_x;
+            uint8_t tile_y;
+
+            if (ppu->window_active)
+            {
+                tile_x = ppu->fetcher_x & 31;
+                tile_y = (ppu->window_y / 8) & 31;
+            }
+            else
+            {
+                tile_x = ppu->fetcher_x & 31;
+                tile_y = ((ppu->ly + ppu->scy) / 8) & 31;
+            }
 
             uint16_t map_address = tile_map_address + tile_y * 32 + tile_x;
 
@@ -816,7 +930,9 @@ void ppu_fetcher_update(PPU *ppu) {
                 tile_address = 0x9000 + (int8_t)ppu->fetcher_tile * 16;
             }
 
-            uint8_t row = (ppu->ly + ppu->scy) & 7;
+            uint8_t row = ppu->window_active
+            ? ppu->window_y & 7
+            : (ppu->ly + ppu->scy) & 7;
 
             ppu->fetcher_low = ppu->vram[tile_address - 0x8000 + row * 2];
             ppu->fetcher_step = 2;
@@ -830,7 +946,10 @@ void ppu_fetcher_update(PPU *ppu) {
                 tile_address = 0x9000 + (int8_t)ppu->fetcher_tile * 16;
             }
 
-            uint8_t row = (ppu->ly + ppu->scy) & 7;
+            uint8_t row = ppu->window_active
+            ? ppu->window_y & 7
+            : (ppu->ly + ppu->scy) & 7;
+
             ppu->fetcher_high = ppu->vram[tile_address - 0x8000 + row * 2 + 1];
             ppu->fetcher_step = 3;
             break;
@@ -881,7 +1000,41 @@ void ppu_start_drawing(PPU *ppu) {
 
     ppu->fetcher_step = 0;
     ppu->fetcher_cycle = 0;
-    ppu->fetcher_x = 0;
+    ppu->fetcher_x = ppu->scx >> 3;
+
     ppu->output_x = 0;
     ppu->discard_pixels = ppu->scx & 7;
+
+    ppu->window_active = 0;
+    ppu->window_x = 0;
+    ppu->window_y = ppu->window_line;
+}
+
+void ppu_check_window_start(PPU *ppu) {
+    if (ppu->window_active) {
+        return;
+    }
+    int window_screen_x = (int)ppu->wx - 7;
+
+    if (ppu->output_x < window_screen_x)
+        return;
+
+    if (!(ppu->lcdc & 0x20) || !(ppu->lcdc & 0x01))
+        return;
+
+    if (ppu->ly < ppu->wy || ppu->wx > 166)
+        return;
+
+    if (ppu->wx > 166)
+        return;
+
+    //Switch to window fetching
+    ppu->window_active = 1;
+
+    ppu->fetcher_x = 0;
+    ppu->discard_pixels = ppu->wx < 7 ? 7 - ppu->wx : 0;
+    ppu->fetcher_step = 0;
+    ppu->fetcher_cycle = 0;
+
+    ppu_fifo_reset(&ppu->bg_fifo);
 }

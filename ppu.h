@@ -61,6 +61,9 @@ typedef struct PPU {
     uint8_t wx;    // FF4B
 
     uint8_t window_line;
+    uint8_t window_active;
+    uint8_t window_x;
+    uint8_t window_y;
 
     uint16_t dot;
     uint8_t mode;
@@ -126,3 +129,4 @@ int ppu_fifo_pop(PixelFIFO *fifo, uint8_t *color);
 void ppu_fetcher_update(PPU *ppu);
 void ppu_output_pixel(PPU *ppu, uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH]);
 void ppu_start_drawing(PPU *ppu);
+void ppu_check_window_start(PPU *ppu);
