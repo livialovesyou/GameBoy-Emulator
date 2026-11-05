@@ -26,6 +26,10 @@
 
 #define INT_VBLANK 0x01
 
+#define OAM_SPRITE_COUNT 40
+#define OAM_SPRITE_SIZE 4
+#define MAX_SPRITES_PER_SCANLINE 10
+
 typedef struct BUS BUS;
 
 typedef struct PPU {
@@ -38,6 +42,8 @@ typedef struct PPU {
     uint8_t scy; // Background vertical scroll
     uint8_t scx; // Background horizontal scroll
     uint8_t bgp;    // Background palette
+    uint8_t obp0;   //Palette 1
+    uint8_t obp1;   //Palette 2
     uint8_t ly;    // FF44
     uint8_t lyc;   // FF45
     uint8_t wy;    // FF4A
@@ -48,8 +54,19 @@ typedef struct PPU {
     uint16_t dot;
     uint8_t mode;
     uint8_t previous_mode;
+    uint8_t stat_irq_line;
+    uint8_t lcd_was_enabled;
 
 } PPU;
+
+typedef struct {
+    uint8_t y;
+    uint8_t x;
+    uint8_t tile;
+    uint8_t attributes;
+    int oam_index;
+} Sprite;
+
 
 void ppu_init(PPU *ppu);
 void ppu_decode_tile(PPU *ppu, uint16_t tile_address, uint8_t pixels[8][8]);
@@ -61,6 +78,17 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles, uint8_t framebuffer[SCREEN_
 void ppu_update_stat(PPU *ppu);
 void ppu_request_stat_interrupt(PPU *ppu, BUS *BUS);
 void ppu_render_scanline(PPU *ppu, uint8_t pixels[SCREEN_HEIGHT][SCREEN_WIDTH]);
+
 int ppu_window_is_visible(PPU *ppu, int x, int y);
 void ppu_get_window_coordinates(PPU *ppu, int x, uint8_t *tile_x, uint8_t *tile_y, uint8_t *pixel_x, uint8_t *pixel_y);
 uint8_t ppu_get_window_pixel(PPU *ppu, int x);
+
+void ppu_get_sprite(PPU *ppu, int index, Sprite *sprite);
+int ppu_sprite_overlaps_scanline(PPU *ppu, Sprite *sprite, int scanline);
+int ppu_get_scanline_sprites(PPU *ppu, int scanline, Sprite sprites[MAX_SPRITES_PER_SCANLINE]);
+uint8_t ppu_get_sprite_pixel(PPU *ppu, Sprite *sprite, int pixel_x, int pixel_y);
+void ppu_render_sprites(PPU *ppu, int scanline, uint8_t pixels[SCREEN_WIDTH], uint8_t bg_color_indices[SCREEN_WIDTH]);
+uint8_t ppu_get_sprite_color(PPU *ppu, Sprite *sprite, uint8_t color_index);
+void ppu_sort_sprites(Sprite sprites[], int count);
+int ppu_vram_accessible(PPU *ppu);
+int ppu_oam_accessible(PPU *ppu);

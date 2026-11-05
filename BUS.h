@@ -17,9 +17,15 @@ typedef struct BUS {
     uint8_t interrupt_flags;  // IF: 0xFF0F
 
     PPU *ppu;
+
+    uint8_t dma_active;
+    uint16_t dma_source;
+    uint16_t dma_index;
+    uint8_t dma_cycle_counter;
 } BUS;
 
 uint8_t bus_read_byte(BUS *BUS, uint16_t address);
 void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value);
+void bus_update_dma(BUS *BUS, uint64_t cycles);
 
 //GB_EMULATOR_BUS_H

@@ -8,13 +8,8 @@
 #include <stdint.h>
 
 
-//Read a byte from wram
-uint8_t bus_read_byte(BUS *BUS, uint16_t address) {
 
-    // if (address >= 0xFF40 && address <= 0xFF4B) {
-    //    return ppu_read_register(BUS->ppu, address);
-    // }
-
+static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
     switch (address) {
         case 0xFF40: // LCDC
         case 0xFF41: // STAT
@@ -29,13 +24,21 @@ uint8_t bus_read_byte(BUS *BUS, uint16_t address) {
     }
 
 
-    //VRAM
-    if (address >= 0x8000 && address <= 0x9FFF) {
+    // VRAM: 0x8000–0x9FFF
+    if (address >= 0x8000 && address <= 0x9FFF)
+    {
+        if (!ppu_vram_accessible(BUS->ppu))
+            return 0xFF;
+
         return BUS->ppu->vram[address - 0x8000];
     }
 
-    //OAM
-    if (address >= 0xFE00 && address <= 0xFE9F) {
+    // OAM: 0xFE00–0xFE9F
+    if (address >= 0xFE00 && address <= 0xFE9F)
+    {
+        if (!ppu_oam_accessible(BUS->ppu))
+            return 0xFF;
+
         return BUS->ppu->oam[address - 0xFE00];
     }
 
@@ -66,10 +69,45 @@ uint8_t bus_read_byte(BUS *BUS, uint16_t address) {
     return 0xFF;
 }
 
+//Read a byte from wram
+uint8_t bus_read_byte(BUS *BUS, uint16_t address) {
+
+    // if (address >= 0xFF40 && address <= 0xFF4B) {
+    //    return ppu_read_register(BUS->ppu, address);
+    // }
+
+    if (BUS->dma_active) {
+        if (address < 0xFF80 || address > 0xFFFE) {
+            return 0xFF;
+        }
+    }
+
+    return bus_read_byte_internal(BUS, address);
+}
+
+uint8_t bus_read_byte_dma(BUS *BUS, uint16_t address) {
+    return bus_read_byte_internal(BUS, address);
+}
+
 //Write a byte into wram
 void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
 
+    if (BUS->dma_active) {
+        if (address < 0xFF80 || address > 0xFFFE) {
+            return;
+        }
+    }
+
     switch (address) {
+
+        case 0xFF46: {
+            BUS->dma_active = 1;
+            BUS->dma_source = (uint16_t)value << 8;
+            BUS->dma_index = 0;
+            BUS->dma_cycle_counter = 0;
+            break;
+        }
+
         case 0xFF40: // LCDC
         case 0xFF41: // STAT
         case 0xFF42: // SCY
@@ -88,14 +126,22 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
         ppu_write_register(BUS->ppu, address, value);
     }
 
-    //VRAM
-    if (address >= 0x8000 && address <= 0x9FFF) {
+    // VRAM: 0x8000–0x9FFF
+    if (address >= 0x8000 && address <= 0x9FFF)
+    {
+        if (!ppu_vram_accessible(BUS->ppu))
+            return;
+
         BUS->ppu->vram[address - 0x8000] = value;
         return;
     }
 
-    //OAM
-    if (address >= 0xFE00 && address <= 0xFE9F) {
+    // OAM: 0xFE00–0xFE9F
+    if (address >= 0xFE00 && address <= 0xFE9F)
+    {
+        if (!ppu_oam_accessible(BUS->ppu))
+            return;
+
         BUS->ppu->oam[address - 0xFE00] = value;
         return;
     }
@@ -128,3 +174,25 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
     }
 }
 
+void bus_update_dma(BUS *BUS, uint64_t cycles) {
+    if (!BUS->dma_active) {
+        return;
+    }
+
+    for (uint64_t i = 0; i < cycles; i++) {
+        BUS->dma_cycle_counter++;
+
+        if (BUS->dma_cycle_counter == 4) {
+            BUS->dma_cycle_counter = 0;
+
+            uint8_t data = bus_read_byte_dma(BUS, BUS->dma_source + BUS->dma_index);
+            BUS->ppu->oam[BUS->dma_index] = data;
+            BUS->dma_index++;
+
+            if (BUS->dma_index == 0xA0) {
+                BUS->dma_active = 0;
+                break;
+            }
+        }
+    }
+}

@@ -2879,6 +2879,7 @@ void test_ppu_HBlank_transition(void) {
 
     // Enable LCD, background, and unsigned tile addressing.
     ppu.lcdc = 0x91;
+    ppu.lcd_was_enabled = 1;
 
     // Identity palette.
     ppu.bgp = 0xE4;
@@ -2951,6 +2952,7 @@ void test_ppu_scanline_crossing(void) {
 
     // Enable LCD, background, and unsigned tile addressing.
     ppu.lcdc = 0x91;
+    ppu.lcd_was_enabled = 1;
     ppu.bgp = 0xE4;
 
     // Make tile 0's first row color index 1.
@@ -3217,7 +3219,7 @@ void test_ppu_window_line_reset(void)
     BUS.ppu = &ppu;
 
     ppu.lcdc = 0x80;
-
+    ppu.lcd_was_enabled = 1;
     // Simulate the end of a frame.
     ppu.ly = 153;
     ppu.dot = 455;
@@ -3236,6 +3238,1003 @@ void test_ppu_window_line_reset(void)
     printf("PASS: Window line counter resets at frame boundary\n");
 }
 
+void test_ppu_get_sprite(void) {
+    PPU ppu;
+    BUS BUS = {0};
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+    Sprite sprite;
+
+    // Set up sprite 0.
+    ppu.oam[0] = 32;
+    ppu.oam[1] = 48;
+    ppu.oam[2] = 5;
+    ppu.oam[3] = 0xA0;
+    ppu_get_sprite(&ppu, 0, &sprite);
+
+    assert(sprite.y == 32);
+    assert(sprite.x == 48);
+    assert(sprite.tile == 5);
+    assert(sprite.attributes == 0xA0);
+
+    printf("PASS: Sprite data read from OAM\n");
+}
+
+void test_ppu_sprite_overlaps_scanline(void) {
+    PPU ppu;
+    BUS BUS = {0};
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+    Sprite sprite;
+
+    // Sprite starts at screen Y = 16.
+    sprite.y = 32;
+
+    // Test 8x8 sprite.
+    ppu.lcdc &= (uint8_t)~0x04;
+
+    assert(ppu_sprite_overlaps_scanline(&ppu, &sprite, 15) == 0);
+    assert(ppu_sprite_overlaps_scanline(&ppu, &sprite, 16) == 1);
+    assert(ppu_sprite_overlaps_scanline(&ppu, &sprite, 23) == 1);
+    assert(ppu_sprite_overlaps_scanline(&ppu, &sprite, 24) == 0);
+
+    // Test 8x16 sprite.
+    ppu.lcdc |= 0x04;
+
+    assert(ppu_sprite_overlaps_scanline(&ppu, &sprite, 16) == 1);
+    assert(ppu_sprite_overlaps_scanline(&ppu, &sprite, 31) == 1);
+    assert(ppu_sprite_overlaps_scanline(&ppu, &sprite, 32) == 0);
+
+    printf("PASS: 8x8 sprite scanline detection\n");
+    printf("PASS: 8x16 sprite scanline detection\n");
+}
+
+void test_ppu_get_scanline_sprites(void) {
+    PPU ppu;
+    BUS BUS = {0};
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+    ppu.lcdc &= (uint8_t)~0x04; // 8x8 sprites
+
+    // Place 12 sprites on scanline 20.
+    for (int i = 0; i < 12; i++)
+    {
+        int offset = i * 4;
+
+        ppu.oam[offset] = 36;       // Y = 20
+        ppu.oam[offset + 1] = 40;   // X = 32
+        ppu.oam[offset + 2] = i;    // Tile number
+        ppu.oam[offset + 3] = 0;
+    }
+
+    Sprite sprites[MAX_SPRITES_PER_SCANLINE];
+
+    int count = ppu_get_scanline_sprites(
+        &ppu, 20, sprites
+    );
+
+    assert(count == 10);
+
+    // Verify that the first 10 OAM entries were selected.
+    for (int i = 0; i < 10; i++)
+    {
+        assert(sprites[i].tile == i);
+    }
+
+    printf("PASS: Maximum 10 sprites per scanline\n");
+    printf("PASS: Sprites selected in OAM order\n");
+}
+
+void test_ppu_get_sprite_pixel(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    Sprite sprite = {0};
+
+    sprite.tile = 1;
+    sprite.attributes = 0;
+
+    // Tile 1: first row has color index 1 in every pixel.
+    ppu.vram[16] = 0xFF;
+    ppu.vram[17] = 0x00;
+
+    // Remaining rows are color index 0.
+    for (int y = 1; y < 8; y++)
+    {
+        ppu.vram[16 + y * 2] = 0x00;
+        ppu.vram[17 + y * 2] = 0x00;
+    }
+
+    // Normal orientation.
+    assert(ppu_get_sprite_pixel(&ppu, &sprite, 0, 0) == 1);
+    assert(ppu_get_sprite_pixel(&ppu, &sprite, 7, 0) == 1);
+    assert(ppu_get_sprite_pixel(&ppu, &sprite, 0, 1) == 0);
+
+    // Horizontal flip.
+    sprite.attributes = 0x20;
+    assert(ppu_get_sprite_pixel(&ppu, &sprite, 0, 0) == 1);
+
+    // Vertical flip.
+    sprite.attributes = 0x40;
+    assert(ppu_get_sprite_pixel(&ppu, &sprite, 0, 0) == 0);
+
+    printf("PASS: Sprite pixel decoding\n");
+    printf("PASS: Horizontal flipping\n");
+    printf("PASS: Vertical flipping\n");
+}
+
+void test_ppu_sprite_8x16(void)
+{
+    PPU ppu;
+    ppu_init(&ppu);
+
+    Sprite sprite = {0};
+
+    sprite.tile = 5;
+    sprite.attributes = 0;
+
+    // Enable 8x16 sprites.
+    ppu.lcdc |= 0x04;
+
+    // Tile 4: color index 1.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[64 + y * 2] = 0xFF;
+        ppu.vram[65 + y * 2] = 0x00;
+    }
+
+    // Tile 5: color index 2.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[80 + y * 2] = 0x00;
+        ppu.vram[81 + y * 2] = 0xFF;
+    }
+
+    // Top half uses tile 4.
+    assert(ppu_get_sprite_pixel(&ppu, &sprite, 0, 0) == 1);
+
+    // Bottom half uses tile 5.
+    assert(ppu_get_sprite_pixel(&ppu, &sprite, 0, 8) == 2);
+
+    // Test vertical flipping.
+    sprite.attributes = 0x40;
+
+    // Top now corresponds to the original bottom.
+    assert(ppu_get_sprite_pixel(&ppu, &sprite, 0, 0) == 2);
+
+    // Bottom now corresponds to the original top.
+    assert(ppu_get_sprite_pixel(&ppu, &sprite, 0, 15) == 1);
+
+    printf("PASS: 8x16 sprite tile selection\n");
+    printf("PASS: 8x16 vertical flipping\n");
+}
+
+void test_ppu_render_sprites(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+    ppu.obp0 = 0xE4;
+
+    // Enable LCD and sprite rendering.
+    ppu.lcdc = 0x82;
+
+    // Set sprite palette to identity mapping for now.
+    // Palette integration is not implemented yet.
+
+    // Fill the framebuffer scanline with background color 3.
+    uint8_t pixels[SCREEN_WIDTH];
+    memset(pixels, 3, sizeof(pixels));
+
+    // Configure sprite 0:
+    // OAM Y = 32 -> screen Y = 16
+    // OAM X = 48 -> screen X = 40
+    ppu.oam[0] = 32;
+    ppu.oam[1] = 48;
+    ppu.oam[2] = 0;
+    ppu.oam[3] = 0;
+
+    // Configure tile 0:
+    // First pixel row has color index 1 in all 8 pixels.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[row * 2] = 0xFF;
+        ppu.vram[row * 2 + 1] = 0x00;
+    }
+    uint8_t bg_color_indices[SCREEN_WIDTH];
+    // Render scanline 16, where the sprite is visible.
+    ppu_render_sprites(&ppu, 16, pixels,bg_color_indices);
+
+    // Sprite occupies screen X coordinates 40 through 47.
+    for (int x = 40; x < 48; x++)
+        assert(pixels[x] == 1);
+
+    // Pixels outside the sprite must remain unchanged.
+    assert(pixels[39] == 3);
+    assert(pixels[48] == 3);
+
+    printf("PASS: Sprite rendered at correct position\n");
+    printf("PASS: Pixels outside sprite unchanged\n");
+
+    // Test transparent pixels.
+    // Set tile 0 to color index 0.
+    memset(ppu.vram, 0, 16);
+
+    memset(pixels, 3, sizeof(pixels));
+
+    ppu_render_sprites(&ppu, 16, pixels,bg_color_indices);
+
+    // Transparent sprite must not overwrite the background.
+    for (int x = 40; x < 48; x++)
+        assert(pixels[x] == 3);
+
+    printf("PASS: Transparent sprite pixels preserved background\n");
+}
+
+void test_sprite_palettes(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    Sprite sprite = {0};
+
+    // Identity mapping: indices 0,1,2,3 -> shades 0,1,2,3.
+    ppu.obp0 = 0xE4;
+
+    // Map all nonzero indices to shade 3.
+    ppu.obp1 = 0xFC;
+
+    sprite.attributes = 0x00;
+
+    assert(ppu_get_sprite_color(&ppu, &sprite, 0) == 0);
+    assert(ppu_get_sprite_color(&ppu, &sprite, 1) == 1);
+    assert(ppu_get_sprite_color(&ppu, &sprite, 2) == 2);
+    assert(ppu_get_sprite_color(&ppu, &sprite, 3) == 3);
+
+    // Select OBP1 using attribute bit 4.
+    sprite.attributes = 0x10;
+
+    assert(ppu_get_sprite_color(&ppu, &sprite, 0) == 0);
+    assert(ppu_get_sprite_color(&ppu, &sprite, 1) == 3);
+    assert(ppu_get_sprite_color(&ppu, &sprite, 2) == 3);
+    assert(ppu_get_sprite_color(&ppu, &sprite, 3) == 3);
+
+    printf("PASS: OBP0 palette mapping\n");
+    printf("PASS: OBP1 palette mapping\n");
+}
+
+void test_sprite_priority_over_window(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    // Enable LCD, Background, Window and sprites.
+    ppu.lcdc = 0xF3;
+
+    ppu.bgp = 0xE4;
+    ppu.obp0 = 0xE4;
+
+    // Window starts at x=0, y=0.
+    ppu.wx = 7;
+    ppu.wy = 0;
+
+    // Select Window tile map at 0x9C00.
+    // Tile map entry 0 points to tile 1.
+    ppu.vram[0x1C00] = 1;
+
+    // Configure Window tile 1 with color index 2.
+    // Low byte = 0, high byte = 0xFF.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[16 + row * 2] = 0x00;
+        ppu.vram[16 + row * 2 + 1] = 0xFF;
+    }
+
+    // Configure sprite 0 at screen position (0, 0).
+    ppu.oam[0] = 16;
+    ppu.oam[1] = 8;
+    ppu.oam[2] = 2;
+    ppu.oam[3] = 0x80; // Behind nonzero BG/Window pixels.
+
+    // Configure sprite tile 2 with color index 1.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[32 + row * 2] = 0xFF;
+        ppu.vram[32 + row * 2 + 1] = 0x00;
+    }
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu.ly = 0;
+
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Window color index 2 maps to shade 2.
+    for (int x = 0; x < 8; x++)
+        assert(framebuffer[0][x] == 2);
+
+    printf("PASS: Sprite stays behind nonzero Window pixels\n");
+}
+
+void test_sprite_x_priority(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    // Enable LCD, unsigned tile data, and sprites.
+    ppu.lcdc = 0x93;
+
+    ppu.bgp = 0xE4;
+    ppu.obp0 = 0xE4;
+
+    // Sprite 0: screen position (4, 0), tile 1.
+    // Higher OAM index priority, but smaller X.
+    ppu.oam[0] = 16;
+    ppu.oam[1] = 12;
+    ppu.oam[2] = 1;
+    ppu.oam[3] = 0x00;
+
+    // Sprite 1: screen position (0, 0), tile 2.
+    // Lower X coordinate, so this sprite has priority.
+    ppu.oam[4] = 16;
+    ppu.oam[5] = 8;
+    ppu.oam[6] = 2;
+    ppu.oam[7] = 0x00;
+
+    // Tile 1: color index 1.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[16 + row * 2] = 0xFF;
+        ppu.vram[16 + row * 2 + 1] = 0x00;
+    }
+
+    // Tile 2: color index 2.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[32 + row * 2] = 0x00;
+        ppu.vram[32 + row * 2 + 1] = 0xFF;
+    }
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu.ly = 0;
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Sprite 1 occupies x=0 through x=7.
+    for (int x = 0; x < 8; x++)
+        assert(framebuffer[0][x] == 2);
+
+    // Overlap is x=4 through x=7.
+    // Sprite 1 must win because it has the smaller X coordinate.
+    for (int x = 4; x < 8; x++)
+        assert(framebuffer[0][x] == 2);
+
+    // Sprite 0 is visible outside the overlap at x=8 through x=11.
+    for (int x = 8; x < 12; x++)
+        assert(framebuffer[0][x] == 1);
+
+    printf("PASS: Smaller-X sprite has priority\n");
+}
+
+void test_sprite_oam_priority(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x93;
+    ppu.bgp = 0xE4;
+    ppu.obp0 = 0xE4;
+
+    // Sprite 0: X=8, tile 1, color index 1.
+    ppu.oam[0] = 16;
+    ppu.oam[1] = 8;
+    ppu.oam[2] = 1;
+    ppu.oam[3] = 0x00;
+
+    // Sprite 1: X=8, tile 2, color index 2.
+    ppu.oam[4] = 16;
+    ppu.oam[5] = 8;
+    ppu.oam[6] = 2;
+    ppu.oam[7] = 0x00;
+
+    // Tile 1: color index 1.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[16 + row * 2] = 0xFF;
+        ppu.vram[16 + row * 2 + 1] = 0x00;
+    }
+
+    // Tile 2: color index 2.
+    for (int row = 0; row < 8; row++)
+    {
+        ppu.vram[32 + row * 2] = 0x00;
+        ppu.vram[32 + row * 2 + 1] = 0xFF;
+    }
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu.ly = 0;
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Both sprites overlap completely.
+    // Sprite 0 has the lower OAM index, so it must win.
+    for (int x = 0; x < 8; x++)
+        assert(framebuffer[0][x] == 1);
+
+    printf("PASS: Lower OAM index sprite has priority on equal X\n");
+}
+
+void test_sprites_render_with_background_disabled(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    // LCD enabled, sprites enabled, background disabled.
+    ppu.lcdc = 0x92;
+
+    ppu.obp0 = 0xE4;
+    ppu.bgp = 0xE4;
+
+    // Place sprite at screen position (0, 0).
+    ppu.oam[0] = 16; // Y position
+    ppu.oam[1] = 8;  // X position
+    ppu.oam[2] = 1;  // Tile number
+    ppu.oam[3] = 0;  // Attributes
+
+    // Make every pixel in tile 1 use color index 1.
+    int tile_offset = 1 * 16;
+
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[tile_offset + y * 2] = 0xFF;
+        ppu.vram[tile_offset + y * 2 + 1] = 0x00;
+    }
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Sprite should be visible.
+    for (int x = 0; x < 8; x++)
+        assert(framebuffer[0][x] == 1);
+
+    // Background should remain color zero outside the sprite.
+    assert(framebuffer[0][8] == 0);
+
+    printf("test_sprites_render_with_background_disabled passed\n");
+}
+
+void test_sprite_behind_background(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x93; // LCD, sprites, and background enabled
+    ppu.bgp = 0xE4;
+    ppu.obp0 = 0xE4;
+
+    // Background tile 0: every pixel has color index 1.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[y * 2] = 0xFF;
+        ppu.vram[y * 2 + 1] = 0x00;
+    }
+
+    // Background map uses tile 0.
+    ppu.vram[0x1800] = 0;
+
+    // Sprite at screen position (0, 0), behind background.
+    ppu.oam[0] = 16;
+    ppu.oam[1] = 8;
+    ppu.oam[2] = 1;
+    ppu.oam[3] = 0x80;
+
+    // Sprite tile 1: every pixel has color index 2.
+    int tile_offset = 1 * 16;
+
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[tile_offset + y * 2] = 0x00;
+        ppu.vram[tile_offset + y * 2 + 1] = 0xFF;
+    }
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Nonzero background pixels hide the sprite.
+    assert(framebuffer[0][0] == 1);
+
+    printf("test_sprite_behind_background passed\n");
+}
+
+void test_sprite_behind_background_color_zero(void) {
+
+    PPU ppu;
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x93;
+    ppu.bgp = 0xE4;
+    ppu.obp0 = 0xE4;
+
+    // Background tile 0: every pixel has color index 0.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[y * 2] = 0x00;
+        ppu.vram[y * 2 + 1] = 0x00;
+    }
+
+    ppu.vram[0x1800] = 0;
+
+    // Sprite at screen position (0, 0), behind background.
+    ppu.oam[0] = 16;
+    ppu.oam[1] = 8;
+    ppu.oam[2] = 1;
+    ppu.oam[3] = 0x80;
+
+    // Sprite tile 1: every pixel has color index 2.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[16 + y * 2] = 0x00;
+        ppu.vram[16 + y * 2 + 1] = 0xFF;
+    }
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Color-zero background must not hide the sprite.
+    assert(framebuffer[0][0] == 2);
+
+    printf("test_sprite_behind_background_color_zero passed\n");
+}
+
+void test_sprite_transparency(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x93;
+    ppu.bgp = 0xE4;
+    ppu.obp0 = 0xE4;
+
+    // Background tile 0: color index 1 everywhere.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[y * 2] = 0xFF;
+        ppu.vram[y * 2 + 1] = 0x00;
+    }
+
+    ppu.vram[0x1800] = 0;
+
+    // Sprite at screen position (0, 0).
+    ppu.oam[0] = 16;
+    ppu.oam[1] = 8;
+    ppu.oam[2] = 1;
+    ppu.oam[3] = 0;
+
+    // Sprite tile 1: color index 0 everywhere (transparent).
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[16 + y * 2] = 0x00;
+        ppu.vram[16 + y * 2 + 1] = 0x00;
+    }
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Transparent sprite must not overwrite background color 1.
+    assert(framebuffer[0][0] == 1);
+
+    printf("test_sprite_transparency passed\n");
+}
+
+void test_sprite_horizontal_flip(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x82; // LCD and sprites enabled
+    ppu.obp0 = 0xE4;
+
+    // Sprite at screen position (0, 0).
+    ppu.oam[0] = 16;
+    ppu.oam[1] = 8;
+    ppu.oam[2] = 1;
+    ppu.oam[3] = 0x20; // Horizontal flip
+
+    // Tile row: color indices 1, 3, 0, 0, 0, 0, 0, 0.
+    // Low plane:  10000000
+    // High plane: 11000000
+    ppu.vram[16] = 0xC0;
+    ppu.vram[17] = 0xA0;
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    uint8_t tile_pixels[8][8];
+
+    ppu_decode_tile(&ppu, 0x8010, tile_pixels);
+
+    // for (int x = 0; x < 8; x++)
+    // {
+    //     printf("%d ", tile_pixels[0][x]);
+    // }
+    // printf("\n");
+
+    ppu_render_scanline(&ppu, framebuffer);
+    // for (int x = 0; x < 8; x++)
+    // {
+    //     printf("%d ", framebuffer[0][x]);
+    // }
+    // printf("\n");
+
+
+    // After horizontal flipping: 0, 0, 0, 0, 0, 2, 1, 3.
+    assert(framebuffer[0][0] == 0);
+    assert(framebuffer[0][1] == 0);
+    assert(framebuffer[0][2] == 0);
+    assert(framebuffer[0][3] == 0);
+    assert(framebuffer[0][4] == 0);
+    assert(framebuffer[0][5] == 2);
+    assert(framebuffer[0][6] == 1);
+    assert(framebuffer[0][7] == 3);
+
+    printf("test_sprite_horizontal_flip passed\n");
+}
+
+void test_sprite_vertical_flip(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x82; // LCD and sprites enabled
+    ppu.obp0 = 0xE4;
+
+    // Sprite at screen position (0, 0).
+    ppu.oam[0] = 16;
+    ppu.oam[1] = 8;
+    ppu.oam[2] = 1;
+    ppu.oam[3] = 0x40; // Vertical flip
+
+    // First tile row: color index 1.
+    ppu.vram[16] = 0xFF;
+    ppu.vram[17] = 0x00;
+
+    // Last tile row: color index 2.
+    ppu.vram[16 + 7 * 2] = 0x00;
+    ppu.vram[16 + 7 * 2 + 1] = 0xFF;
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Screen row 0 should show the original tile's last row.
+    for (int x = 0; x < 8; x++)
+        assert(framebuffer[0][x] == 2);
+
+    printf("test_sprite_vertical_flip passed\n");
+}
+
+void test_sprite_8x16(void)
+{
+    PPU ppu;
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x86; // LCD, sprites, 8x16 mode
+    ppu.obp0 = 0xE4;
+
+    // Sprite at screen position (0, 0).
+    ppu.oam[0] = 16;
+    ppu.oam[1] = 8;
+    ppu.oam[2] = 3; // LSB ignored; tiles 2 and 3 are used.
+    ppu.oam[3] = 0;
+
+    // Upper tile (tile 2): color index 1.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[2 * 16 + y * 2] = 0xFF;
+        ppu.vram[2 * 16 + y * 2 + 1] = 0x00;
+    }
+
+    // Lower tile (tile 3): color index 2.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[3 * 16 + y * 2] = 0x00;
+        ppu.vram[3 * 16 + y * 2 + 1] = 0xFF;
+    }
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    // Render the first scanline.
+    ppu.ly = 0;
+    ppu_render_scanline(&ppu, framebuffer);
+
+    assert(framebuffer[0][0] == 1);
+
+    // Render the ninth scanline.
+    ppu.ly = 8;
+    ppu_render_scanline(&ppu, framebuffer);
+
+    assert(framebuffer[8][0] == 2);
+
+    printf("test_sprite_8x16 passed\n");
+}
+
+void test_sprite_8x16_vertical_flip(void)
+{
+    PPU ppu;
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0xC6; // LCD enabled, sprites enabled, 8x16 mode
+    ppu.obp0 = 0xE4;
+
+    // Sprite at screen position (0, 0).
+    ppu.oam[0] = 16;
+    ppu.oam[1] = 8;
+    ppu.oam[2] = 2;
+    ppu.oam[3] = 0x40; // Vertical flip
+
+    // Upper tile (tile 2): color index 1.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[2 * 16 + y * 2] = 0xFF;
+        ppu.vram[2 * 16 + y * 2 + 1] = 0x00;
+    }
+
+    // Lower tile (tile 3): color index 2.
+    for (int y = 0; y < 8; y++)
+    {
+        ppu.vram[3 * 16 + y * 2] = 0x00;
+        ppu.vram[3 * 16 + y * 2 + 1] = 0xFF;
+    }
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    // Render the first and last scanlines of the sprite.
+    ppu.ly = 0;
+    ppu_render_scanline(&ppu, framebuffer);
+
+    ppu.ly = 15;
+    ppu_render_scanline(&ppu, framebuffer);
+
+    // Vertical flip puts the lower tile at the top.
+    assert(framebuffer[0][0] == 2);
+
+    // The upper tile appears at the bottom.
+    assert(framebuffer[15][0] == 1);
+
+    printf("test_sprite_8x16_vertical_flip passed\n");
+}
+
+void test_stat_interrupt_edge(void) {
+    PPU ppu;
+    BUS BUS = {0};
+
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x80;
+    ppu.mode = PPU_MODE_OAM;
+    ppu.stat = STAT_INT_OAM;
+
+    ppu_update_stat(&ppu);
+    ppu_request_stat_interrupt(&ppu, &BUS);
+
+    assert(BUS.interrupt_flags & INT_STAT);
+
+    // Clear IF manually.
+    BUS.interrupt_flags &= (uint8_t)~INT_STAT;
+
+    // Signal is still active: no second interrupt.
+    ppu_request_stat_interrupt(&ppu, &BUS);
+
+    assert(!(BUS.interrupt_flags & INT_STAT));
+
+    // Disable the OAM interrupt source.
+    ppu.stat &= (uint8_t)~STAT_INT_OAM;
+    ppu_request_stat_interrupt(&ppu, &BUS);
+
+    // Re-enable it: a new rising edge should occur.
+    ppu.stat |= STAT_INT_OAM;
+    ppu_request_stat_interrupt(&ppu, &BUS);
+
+    assert(BUS.interrupt_flags & INT_STAT);
+
+    printf("test_stat_interrupt_edge passed\n");
+}
+
+void test_ppu_memory_access(void)
+{
+    PPU ppu;
+    BUS BUS = {0};
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    ppu.lcdc = 0x80;
+
+    // Initialize memory directly.
+    ppu.vram[0] = 0x42;
+    ppu.oam[0] = 0x55;
+
+    // Mode 2: VRAM accessible, OAM blocked.
+    ppu.mode = PPU_MODE_OAM;
+
+    assert(bus_read_byte(&BUS, 0x8000) == 0x42);
+    assert(bus_read_byte(&BUS, 0xFE00) == 0xFF);
+
+    bus_write_byte(&BUS, 0x8000, 0x99);
+    bus_write_byte(&BUS, 0xFE00, 0x99);
+
+    assert(ppu.vram[0] == 0x99);
+    assert(ppu.oam[0] == 0x55);
+
+    // Mode 3: both blocked.
+    ppu.mode = PPU_MODE_DRAWING;
+
+    assert(bus_read_byte(&BUS, 0x8000) == 0xFF);
+    assert(bus_read_byte(&BUS, 0xFE00) == 0xFF);
+
+    bus_write_byte(&BUS, 0x8000, 0x11);
+    bus_write_byte(&BUS, 0xFE00, 0x11);
+
+    assert(ppu.vram[0] == 0x99);
+    assert(ppu.oam[0] == 0x55);
+
+    // Mode 0: both accessible.
+    ppu.mode = PPU_MODE_HBLANK;
+
+    assert(bus_read_byte(&BUS, 0x8000) == 0x99);
+    assert(bus_read_byte(&BUS, 0xFE00) == 0x55);
+
+    // LCD disabled: both accessible.
+    ppu.lcdc = 0;
+    ppu.mode = PPU_MODE_HBLANK;
+
+    assert(bus_read_byte(&BUS, 0x8000) == 0x99);
+    assert(bus_read_byte(&BUS, 0xFE00) == 0x55);
+
+    printf("PASS: PPU VRAM and OAM access restrictions\n");
+}
+
+void test_oam_dma(void) {
+    BUS BUS = {0};
+    PPU ppu;
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    // Fill source memory with recognizable data.
+    for (int i = 0; i < 0xA0; i++) {
+        bus_write_byte(&BUS, 0xC000 + i, (uint8_t)(i + 1));
+    }
+
+    // Start DMA from address 0xC000.
+    bus_write_byte(&BUS, 0xFF46, 0xC0);
+
+    // DMA should be active immediately after starting.
+    assert(BUS.dma_active == 1);
+    assert(BUS.dma_index == 0);
+
+    // Advance 4 T-cycles: first byte should be copied.
+    bus_update_dma(&BUS, 4);
+
+    assert(BUS.dma_index == 1);
+    assert(ppu.oam[0] == 1);
+    assert(BUS.dma_active == 1);
+
+    // Advance another 632 T-cycles.
+    bus_update_dma(&BUS, 636);
+
+    // All 160 bytes should now be copied.
+    assert(BUS.dma_active == 0);
+    assert(BUS.dma_index == 160);
+
+    for (int i = 0; i < 0xA0; i++) {
+        assert(ppu.oam[i] == (uint8_t)(i + 1));
+    }
+
+    printf("OAM DMA timing test passed!\n");
+}
+
+void test_dma_cpu_access(void) {
+    BUS BUS = {0};
+    PPU ppu;
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    // Prepare memory.
+    bus_write_byte(&BUS, 0xC000, 0x42);
+    bus_write_byte(&BUS, 0xFF80, 0x55);
+
+    // Start DMA.
+    bus_write_byte(&BUS, 0xFF46, 0xC0);
+
+    assert(BUS.dma_active == 1);
+
+    // CPU cannot access normal memory.
+    assert(bus_read_byte(&BUS, 0xC000) == 0xFF);
+
+    bus_write_byte(&BUS, 0xC000, 0x99);
+
+    // HRAM remains accessible.
+    assert(bus_read_byte(&BUS, 0xFF80) == 0x55);
+
+    bus_write_byte(&BUS, 0xFF80, 0x66);
+
+    assert(bus_read_byte(&BUS, 0xFF80) == 0x66);
+
+    // DMA must still read the source memory.
+    bus_update_dma(&BUS, 4);
+
+    assert(ppu.oam[0] == 0x42);
+
+    printf("DMA CPU access test passed!\n");
+}
+void test_dma_cpu_access_1(void) {
+    BUS BUS = {0};
+    PPU ppu;
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    // Prepare WRAM and HRAM before DMA starts.
+    bus_write_byte(&BUS, 0xC000, 0x42);
+    bus_write_byte(&BUS, 0xFF80, 0x55);
+    bus_write_byte(&BUS, 0xFFFE, 0x77);
+
+    // Start DMA from page C0.
+    bus_write_byte(&BUS, 0xFF46, 0xC0);
+    assert(BUS.dma_active == 1);
+
+    // CPU reads outside HRAM must return 0xFF.
+    assert(bus_read_byte(&BUS, 0xC000) == 0xFF);
+    assert(bus_read_byte(&BUS, 0xFF7F) == 0xFF);
+    assert(bus_read_byte(&BUS, 0xFFFF) == 0xFF);
+
+    // CPU writes outside HRAM must be ignored.
+    bus_write_byte(&BUS, 0xC000, 0x99);
+    assert(BUS.wram[0] == 0x42);
+
+    // CPU can still read and write HRAM.
+    assert(bus_read_byte(&BUS, 0xFF80) == 0x55);
+    bus_write_byte(&BUS, 0xFF80, 0x66);
+    assert(bus_read_byte(&BUS, 0xFF80) == 0x66);
+
+    assert(bus_read_byte(&BUS, 0xFFFE) == 0x77);
+    bus_write_byte(&BUS, 0xFFFE, 0x88);
+    assert(bus_read_byte(&BUS, 0xFFFE) == 0x88);
+
+    // DMA must bypass CPU restrictions and read the original WRAM value.
+    bus_update_dma(&BUS, 4);
+    assert(ppu.oam[0] == 0x42);
+
+    printf("DMA CPU access test passed!\n");
+}
+
+void test_dma_loop_integration(void) {
+    BUS BUS = {0};
+    PPU ppu;
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    // Fill source memory with recognizable values.
+    for (int i = 0; i < 0xA0; i++) {
+        bus_write_byte(&BUS, 0xC000 + i, (uint8_t)(i + 1));
+    }
+
+    // Start DMA.
+    bus_write_byte(&BUS, 0xFF46, 0xC0);
+
+    // Simulate CPU steps, each advancing 4 T-cycles.
+    while (BUS.dma_active) {
+        bus_update_dma(&BUS, 4);
+    }
+
+    // Verify the transfer.
+    assert(BUS.dma_index == 0xA0);
+
+    for (int i = 0; i < 0xA0; i++) {
+        assert(ppu.oam[i] == (uint8_t)(i + 1));
+    }
+
+    printf("DMA loop integration test passed!\n");
+}
+
 void test_cpu(void) {
     test_cpu_registers_1();
     test_cpu_flags_1();
@@ -3249,4 +4248,46 @@ void test_cpu(void) {
     test_cpu_opcodes_8();
     test_cpu_opcodes_9();
     test_cpu_interrupts();
+}
+
+void test_ppu(void) {
+   // test_ppu_render_bg();
+    test_ppu_registers();
+    test_ppu_update();
+    test_ppu_lyc();
+    test_ppu_stat_interrupt();
+    test_ppu_render_scanlines();
+    test_ppu_HBlank_transition();
+    test_ppu_scanline_crossing();
+    test_ppu_window_helper();
+    test_ppu_window_coords();
+    test_ppu_window_pixel();
+    test_ppu_render_scanline_window();
+    test_ppu_window_line_progression();
+    test_ppu_window_line_reset();
+    test_ppu_get_sprite();
+    test_ppu_sprite_overlaps_scanline();
+    test_ppu_get_scanline_sprites();
+    test_ppu_get_sprite_pixel();
+    test_ppu_sprite_8x16();
+    test_ppu_render_sprites();
+    test_sprite_palettes();
+    test_sprite_priority_over_window();
+    test_sprite_x_priority();
+    test_sprite_oam_priority();
+    test_sprites_render_with_background_disabled();
+    test_sprite_behind_background();
+    test_sprite_behind_background_color_zero();
+    test_sprite_transparency();
+    test_sprite_horizontal_flip();
+    test_sprite_vertical_flip();
+    test_sprite_8x16();
+    test_sprite_8x16_vertical_flip();
+    test_stat_interrupt_edge();
+    test_ppu_memory_access();
+    test_oam_dma();
+    test_dma_cpu_access();
+    test_dma_cpu_access_1();
+    test_dma_loop_integration();
+
 }
