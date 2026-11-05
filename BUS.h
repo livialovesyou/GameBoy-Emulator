@@ -25,6 +25,11 @@ typedef struct BUS {
     uint16_t dma_source;
     uint16_t dma_index;
     uint8_t dma_cycle_counter;
+    uint8_t dma_startup_delay;
+
+    //Serial Port
+    uint8_t serial_data;
+    uint8_t serial_control;
 } BUS;
 
 uint8_t bus_read_byte(BUS *BUS, uint16_t address);

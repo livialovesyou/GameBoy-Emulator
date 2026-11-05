@@ -12,6 +12,7 @@
 
 #include "cpu.h"
 #include "ppu.h"
+#include "timer.h"
 
 void echo_ram_test_1(void) {
     BUS BUS = {0};
@@ -4089,7 +4090,8 @@ void test_ppu_memory_access(void)
     printf("PASS: PPU VRAM and OAM access restrictions\n");
 }
 
-void test_oam_dma(void) {
+void test_oam_dma(void)
+{
     BUS BUS = {0};
     PPU ppu;
 
@@ -4104,24 +4106,29 @@ void test_oam_dma(void) {
     // Start DMA from address 0xC000.
     bus_write_byte(&BUS, 0xFF46, 0xC0);
 
-    // DMA should be active immediately after starting.
     assert(BUS.dma_active == 1);
     assert(BUS.dma_index == 0);
+    assert(ppu.oam[0] == 0);
 
-    // Advance 4 T-cycles: first byte should be copied.
+    // First 4 T-cycles: startup delay.
+    bus_update_dma(&BUS, 4);
+
+    assert(BUS.dma_index == 0);
+    assert(ppu.oam[0] == 0);
+
+    // Next 4 T-cycles: first byte transferred.
     bus_update_dma(&BUS, 4);
 
     assert(BUS.dma_index == 1);
     assert(ppu.oam[0] == 1);
-    assert(BUS.dma_active == 1);
 
-    // Advance another 632 T-cycles.
+    // Transfer remaining 159 bytes.
     bus_update_dma(&BUS, 636);
 
-    // All 160 bytes should now be copied.
     assert(BUS.dma_active == 0);
     assert(BUS.dma_index == 160);
 
+    // Verify all transferred bytes.
     for (int i = 0; i < 0xA0; i++) {
         assert(ppu.oam[i] == (uint8_t)(i + 1));
     }
@@ -4129,38 +4136,52 @@ void test_oam_dma(void) {
     printf("OAM DMA timing test passed!\n");
 }
 
-void test_dma_cpu_access(void) {
+void test_dma_cpu_access(void)
+{
     BUS BUS = {0};
     PPU ppu;
 
     ppu_init(&ppu);
     BUS.ppu = &ppu;
 
-    // Prepare memory.
+    // Prepare DMA source data.
     bus_write_byte(&BUS, 0xC000, 0x42);
-    bus_write_byte(&BUS, 0xFF80, 0x55);
 
     // Start DMA.
     bus_write_byte(&BUS, 0xFF46, 0xC0);
 
     assert(BUS.dma_active == 1);
 
-    // CPU cannot access normal memory.
+    // CPU cannot access memory outside HRAM during DMA.
     assert(bus_read_byte(&BUS, 0xC000) == 0xFF);
+    assert(bus_read_byte(&BUS, 0x8000) == 0xFF);
 
-    bus_write_byte(&BUS, 0xC000, 0x99);
-
-    // HRAM remains accessible.
+    // CPU can still access HRAM.
+    bus_write_byte(&BUS, 0xFF80, 0x55);
     assert(bus_read_byte(&BUS, 0xFF80) == 0x55);
 
-    bus_write_byte(&BUS, 0xFF80, 0x66);
+    // Writes outside HRAM are ignored.
+    bus_write_byte(&BUS, 0xC000, 0x99);
+    assert(BUS.wram[0] == 0x42);
 
-    assert(bus_read_byte(&BUS, 0xFF80) == 0x66);
-
-    // DMA must still read the source memory.
+    // Startup delay: no transfer yet.
     bus_update_dma(&BUS, 4);
+    assert(BUS.dma_index == 0);
+    assert(ppu.oam[0] == 0);
 
+    // First byte transfers after another 4 cycles.
+    bus_update_dma(&BUS, 4);
+    assert(BUS.dma_index == 1);
     assert(ppu.oam[0] == 0x42);
+
+    // DMA internal reads must bypass CPU access restrictions.
+    assert(ppu.oam[0] == 0x42);
+
+    // Finish the remaining transfer.
+    bus_update_dma(&BUS, 636);
+
+    assert(BUS.dma_active == 0);
+    assert(BUS.dma_index == 160);
 
     printf("DMA CPU access test passed!\n");
 }
@@ -4199,13 +4220,532 @@ void test_dma_cpu_access_1(void) {
     assert(bus_read_byte(&BUS, 0xFFFE) == 0x88);
 
     // DMA must bypass CPU restrictions and read the original WRAM value.
+    // First 4 cycles: startup delay.
     bus_update_dma(&BUS, 4);
+    assert(BUS.dma_index == 0);
+    assert(ppu.oam[0] == 0);
+
+    // Next 4 cycles: first byte transferred.
+    bus_update_dma(&BUS, 4);
+    assert(BUS.dma_index == 1);
     assert(ppu.oam[0] == 0x42);
 
     printf("DMA CPU access test passed!\n");
 }
 
-void test_dma_loop_integration(void) {
+void test_dma_loop_integration(void)
+{
+    BUS BUS = {0};
+    PPU ppu;
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    // Fill source memory.
+    for (int i = 0; i < 0xA0; i++) {
+        bus_write_byte(&BUS, 0xC000 + i, (uint8_t)(i + 1));
+    }
+
+    // Start DMA.
+    bus_write_byte(&BUS, 0xFF46, 0xC0);
+
+    uint64_t total_cycles = 0;
+
+    // Simulate CPU steps of 4 T-cycles.
+    while (BUS.dma_active) {
+        bus_update_dma(&BUS, 4);
+        total_cycles += 4;
+    }
+
+    // Startup delay + 160 bytes at 4 T-cycles each.
+    assert(total_cycles == 644);
+    assert(BUS.dma_index == 0xA0);
+    assert(BUS.dma_active == 0);
+
+    // Verify all transferred bytes.
+    for (int i = 0; i < 0xA0; i++) {
+        assert(ppu.oam[i] == (uint8_t)(i + 1));
+    }
+
+    printf("DMA loop integration test passed!\n");
+}
+
+void test_timer_div(void) {
+    TIMER timer;
+    timer_init(&timer);
+
+    uint8_t interrupt_flags = 0;
+
+    // DIV starts at zero.
+    assert(timer_read_register(&timer, 0xFF04) == 0);
+
+    // DIV increments every 256 T-cycles.
+    timer_update(&timer, 255, &interrupt_flags);
+    assert(timer_read_register(&timer, 0xFF04) == 0);
+
+    timer_update(&timer, 1, &interrupt_flags);
+    assert(timer_read_register(&timer, 0xFF04) == 1);
+
+    // Writing DIV resets the internal divider.
+    timer_write_register(&timer, 0xFF04, 0xFF);
+    assert(timer_read_register(&timer, 0xFF04) == 0);
+
+    printf("Timer DIV test passed!\n");
+}
+
+void test_timer_frequency(void) {
+    TIMER timer;
+    uint8_t interrupt_flags = 0;
+
+    // Test all four TAC frequency selections.
+    const uint16_t cycles[4] = {
+        1024, 16, 64, 256
+    };
+
+    for (int frequency = 0; frequency < 4; frequency++) {
+        timer_init(&timer);
+        interrupt_flags = 0;
+
+        // Enable timer and select frequency.
+        timer_write_register(&timer, 0xFF07,
+                             0x04 | frequency);
+
+        // One complete timer period.
+        timer_update(&timer, cycles[frequency] - 1,
+                     &interrupt_flags);
+
+        assert(timer.tima == 0);
+
+        timer_update(&timer, 1, &interrupt_flags);
+
+        assert(timer.tima == 1);
+    }
+
+    printf("Timer frequency test passed!\n");
+}
+
+void test_timer_overflow(void) {
+    TIMER timer;
+    uint8_t interrupt_flags = 0;
+
+    timer_init(&timer);
+
+    timer_write_register(&timer, 0xFF05, 0xFF);
+    timer_write_register(&timer, 0xFF06, 0x42);
+    timer_write_register(&timer, 0xFF07, 0x05);
+
+    // Trigger overflow.
+    timer_update(&timer, 16, &interrupt_flags);
+
+    assert(timer.tima == 0x00);
+    assert(timer.overflow_delay == 4);
+    assert((interrupt_flags & 0x04) == 0);
+
+    // Three cycles should not reload yet.
+    timer_update(&timer, 3, &interrupt_flags);
+
+    assert(timer.tima == 0x00);
+    assert((interrupt_flags & 0x04) == 0);
+
+    // Fourth cycle performs reload and requests interrupt.
+    timer_update(&timer, 1, &interrupt_flags);
+
+    assert(timer.tima == 0x42);
+    assert((interrupt_flags & 0x04) != 0);
+
+    printf("Timer overflow delay test passed!\n");
+}
+
+void test_timer_tima_write_during_overflow(void) {
+    TIMER timer;
+    uint8_t interrupt_flags = 0;
+
+    timer_init(&timer);
+
+    timer_write_register(&timer, 0xFF05, 0xFF);
+    timer_write_register(&timer, 0xFF06, 0x42);
+    timer_write_register(&timer, 0xFF07, 0x05);
+
+    // Trigger overflow.
+    timer_update(&timer, 16, &interrupt_flags);
+
+    assert(timer.overflow_delay == 4);
+
+    // Writing TIMA during the delay must be ignored.
+    timer_write_register(&timer, 0xFF05, 0x99);
+    assert(timer.tima == 0x00);
+
+    // Complete the reload delay.
+    timer_update(&timer, 4, &interrupt_flags);
+
+    assert(timer.tima == 0x42);
+    assert((interrupt_flags & 0x04) != 0);
+
+    printf("Timer TIMA write test passed!\n");
+}
+
+void test_timer_tma_write_during_overflow(void) {
+    TIMER timer;
+    uint8_t interrupt_flags = 0;
+
+    timer_init(&timer);
+
+    timer_write_register(&timer, 0xFF05, 0xFF);
+    timer_write_register(&timer, 0xFF06, 0x42);
+    timer_write_register(&timer, 0xFF07, 0x05);
+
+    // Trigger overflow.
+    timer_update(&timer, 16, &interrupt_flags);
+
+    assert(timer.overflow_delay == 4);
+
+    // Advance until the reload cycle.
+    timer_update(&timer, 3, &interrupt_flags);
+
+    assert(timer.overflow_delay == 1);
+
+    // Change TMA during the reload cycle.
+    timer_write_register(&timer, 0xFF06, 0x99);
+
+    assert(timer.tma == 0x99);
+    assert(timer.tima == 0x99);
+
+    // Complete the reload cycle.
+    timer_update(&timer, 1, &interrupt_flags);
+
+    assert(timer.tima == 0x99);
+    assert((interrupt_flags & 0x04) != 0);
+
+    printf("Timer TMA write test passed!\n");
+}
+
+void test_timer_div_glitch(void) {
+    TIMER timer;
+    uint8_t interrupt_flags = 0;
+
+    timer_init(&timer);
+
+    // Enable timer at 262144 Hz (divider bit 3).
+    timer_write_register(&timer, 0xFF07, 0x05);
+
+    // Advance until divider bit 3 is HIGH.
+    timer_update(&timer, 8, &interrupt_flags);
+
+    assert(timer.tima == 0);
+
+    // Resetting DIV creates a falling edge.
+    timer_write_register(&timer, 0xFF04, 0);
+
+    assert(timer.tima == 1);
+    assert(timer.divider == 0);
+
+    printf("Timer DIV glitch test passed!\n");
+}
+
+void test_timer_tac_glitch(void) {
+    TIMER timer;
+    uint8_t interrupt_flags = 0;
+
+    timer_init(&timer);
+
+    // Enable timer at 262144 Hz (divider bit 3).
+    timer_write_register(&timer, 0xFF07, 0x05);
+
+    // Advance until divider bit 3 is HIGH.
+    timer_update(&timer, 8, &interrupt_flags);
+
+    assert(timer.tima == 0);
+
+    // Disable timer while its signal is HIGH.
+    // This creates a falling edge.
+    timer_write_register(&timer, 0xFF07, 0x00);
+
+    assert(timer.tima == 1);
+    assert((timer.tac & 0x07) == 0);
+
+    printf("Timer TAC glitch test passed!\n");
+}
+
+void test_timer_bus_interrupt(void) {
+    BUS BUS = {0};
+    TIMER timer;
+
+    timer_init(&timer);
+    BUS.timer = &timer;
+
+    // Set TIMA to overflow after one increment.
+    bus_write_byte(&BUS, 0xFF05, 0xFF);
+    bus_write_byte(&BUS, 0xFF06, 0x42);
+    bus_write_byte(&BUS, 0xFF07, 0x05);
+
+    // Enable timer interrupt in IE.
+    bus_write_byte(&BUS, 0xFFFF, 0x04);
+
+    // Trigger overflow.
+    timer_update(&timer, 16, &BUS.interrupt_flags);
+
+    assert(timer.overflow_delay == 4);
+    assert((BUS.interrupt_flags & 0x04) == 0);
+
+    // Complete reload delay.
+    timer_update(&timer, 4, &BUS.interrupt_flags);
+
+    assert(timer.tima == 0x42);
+    assert((BUS.interrupt_flags & 0x04) != 0);
+
+    // Check that the interrupt is enabled in IE.
+    assert((BUS.interrupt_enable & 0x04) != 0);
+
+    printf("Timer BUS interrupt test passed!\n");
+}
+
+void test_timer_registers(void) {
+    BUS BUS = {0};
+    TIMER timer;
+
+    timer_init(&timer);
+    BUS.timer = &timer;
+
+    // Write and read TIMA.
+    bus_write_byte(&BUS, 0xFF05, 0xAB);
+    assert(bus_read_byte(&BUS, 0xFF05) == 0xAB);
+
+    // Write and read TMA.
+    bus_write_byte(&BUS, 0xFF06, 0xCD);
+    assert(bus_read_byte(&BUS, 0xFF06) == 0xCD);
+
+    // TAC upper bits must always read as 1.
+    bus_write_byte(&BUS, 0xFF07, 0x05);
+    assert(bus_read_byte(&BUS, 0xFF07) == 0xFD);
+
+    // DIV advances and exposes the upper 8 divider bits.
+    timer_update(&timer, 256, &BUS.interrupt_flags);
+    assert(bus_read_byte(&BUS, 0xFF04) == 0x01);
+
+    // Writing DIV resets it.
+    bus_write_byte(&BUS, 0xFF04, 0xFF);
+    assert(bus_read_byte(&BUS, 0xFF04) == 0x00);
+
+    printf("Timer register test passed!\n");
+}
+
+void test_cpu_timer_integration(void) {
+    BUS BUS = {0};
+    TIMER timer;
+    CPU cpu = {0};
+
+    timer_init(&timer);
+    BUS.timer = &timer;
+
+    cpu.pc = 0xC000;
+
+    // Program:
+    // LD A, 0x05
+    // LDH (0x07), A    ; Enable TIMA at 262144 Hz
+    // NOP
+    // NOP
+    // NOP
+    // NOP
+    bus_write_byte(&BUS, 0xC000, 0x3E);
+    bus_write_byte(&BUS, 0xC001, 0x05);
+    bus_write_byte(&BUS, 0xC002, 0xE0);
+    bus_write_byte(&BUS, 0xC003, 0x07);
+
+    for (int i = 0; i < 4; i++) {
+        bus_write_byte(&BUS, 0xC004 + i, 0x00);
+    }
+
+    // Execute the first two instructions.
+    for (int i = 0; i < 2; i++) {
+        uint64_t old_cycles = cpu.cycles;
+
+        cpu_step(&cpu, &BUS);
+
+        uint64_t elapsed = cpu.cycles - old_cycles;
+        timer_update(&timer, elapsed, &BUS.interrupt_flags);
+    }
+
+    assert(timer.tac == 0x05);
+
+    // Execute NOP instructions until TIMA increments.
+    for (int i = 0; i < 4; i++) {
+        uint64_t old_cycles = cpu.cycles;
+
+        cpu_step(&cpu, &BUS);
+
+        uint64_t elapsed = cpu.cycles - old_cycles;
+        timer_update(&timer, elapsed, &BUS.interrupt_flags);
+    }
+
+    printf("CPU PC: %04X\n", cpu.pc);
+    printf("CPU cycles: %llu\n", (unsigned long long)cpu.cycles);
+    printf("Timer divider: %04X\n", timer.divider);
+    printf("Timer TIMA: %02X\n", timer.tima);
+    printf("Timer TAC: %02X\n", timer.tac);
+    assert(timer.tima == 2);
+
+    printf("CPU timer integration test passed!\n");
+}
+
+void test_cpu_halt_timer_wakeup(void)
+{
+    CPU cpu = {0};
+    BUS BUS = {0};
+    TIMER timer;
+
+    timer_init(&timer);
+
+    BUS.timer = &timer;
+
+    // Program: HALT, then NOP
+    BUS.wram[0] = 0x76;
+    BUS.wram[1] = 0x00;
+
+    cpu.pc = 0xC000;
+    cpu.ime = 0;
+
+    // Enable timer interrupt
+    bus_write_byte(&BUS, 0xFFFF, 0x04);
+
+    // Enable timer at 16 T-cycle frequency
+    bus_write_byte(&BUS, 0xFF07, 0x05);
+
+    // Execute HALT
+    cpu_step(&cpu, &BUS);
+
+    assert(cpu.halted == 1);
+    assert(cpu.pc == 0xC001);
+
+    // CPU should remain halted without a pending interrupt
+    cpu_step(&cpu, &BUS);
+
+    assert(cpu.halted == 1);
+    assert(cpu.pc == 0xC001);
+
+    // Advance timer until it overflows.
+    timer.tima = 0xFF;
+    timer.divider = 0;
+    timer_update(&timer, 16, &BUS.interrupt_flags);
+    assert(timer.tima == 0x00);
+
+    // Four more cycles complete the overflow delay.
+    timer_update(&timer, 4, &BUS.interrupt_flags);
+
+    assert((BUS.interrupt_flags & 0x04) != 0);
+
+    // CPU should wake up and execute NOP.
+    cpu_step(&cpu, &BUS);
+
+    assert(cpu.halted == 0);
+    assert(cpu.pc == 0xC002);
+
+    printf("test_cpu_halt_timer_wakeup passed\n");
+}
+
+void test_cpu_halt_wakeup_ime_disabled(void)
+{
+    CPU cpu = {0};
+    BUS BUS = {0};
+
+    BUS.wram[0] = 0x76; // HALT
+    BUS.wram[1] = 0x00; // NOP
+
+    cpu.pc = 0xC000;
+    cpu.ime = 0;
+
+    // Enable and request the VBlank interrupt.
+    bus_write_byte(&BUS, 0xFFFF, 0x01);
+    bus_write_byte(&BUS, 0xFF0F, 0x01);
+
+    // HALT with IME disabled and an interrupt pending.
+    cpu_step(&cpu, &BUS);
+
+    assert(cpu.halt_bug == 1);
+    assert(cpu.halted == 0);
+
+    printf("test_cpu_halt_wakeup_ime_disabled passed\n");
+}
+
+void test_cpu_halt_bug_execution(void)
+{
+    CPU cpu = {0};
+    BUS BUS = {0};
+
+    // HALT followed by LD B, 0x42
+    BUS.wram[0] = 0x76;
+    BUS.wram[1] = 0x06;
+    BUS.wram[2] = 0x42;
+
+    cpu.pc = 0xC000;
+    cpu.ime = 0;
+
+    // Enable and request VBlank interrupt.
+    bus_write_byte(&BUS, 0xFFFF, 0x01);
+    bus_write_byte(&BUS, 0xFF0F, 0x01);
+
+    // Execute HALT: activates HALT bug.
+    cpu_step(&cpu, &BUS);
+
+    assert(cpu.halt_bug == 1);
+    assert(cpu.pc == 0xC001);
+
+    // Execute the next instruction.
+    cpu_step(&cpu, &BUS);
+
+    // The opcode byte (0x06) is read again as its own immediate.
+    assert(cpu.b == 0x06);
+    assert(cpu.pc == 0xC002);
+
+    printf("test_cpu_halt_bug_execution passed\n");
+}
+
+void test_oam_dma_restart(void)
+{
+    BUS BUS = {0};
+    PPU ppu;
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    // Fill two source pages with different values.
+    for (int i = 0; i < 0xA0; i++) {
+        bus_write_byte(&BUS, 0xC000 + i, 0x11);
+        bus_write_byte(&BUS, 0xD000 + i, 0x22);
+    }
+
+    // Start DMA from C000.
+    bus_write_byte(&BUS, 0xFF46, 0xC0);
+
+    // Complete startup delay and transfer 3 bytes.
+    bus_update_dma(&BUS, 4);
+    bus_update_dma(&BUS, 12);
+
+    assert(BUS.dma_index == 3);
+    assert(ppu.oam[0] == 0x11);
+    assert(ppu.oam[2] == 0x11);
+
+    // Restart DMA from D000.
+    bus_write_byte(&BUS, 0xFF46, 0xD0);
+
+    assert(BUS.dma_active == 1);
+    assert(BUS.dma_source == 0xD000);
+    assert(BUS.dma_index == 0);
+
+    // Complete the new startup delay.
+    bus_update_dma(&BUS, 4);
+    assert(BUS.dma_index == 0);
+
+    // Transfer the first byte from the new source.
+    bus_update_dma(&BUS, 4);
+
+    assert(BUS.dma_index == 1);
+    assert(ppu.oam[0] == 0x22);
+
+    printf("OAM DMA restart test passed!\n");
+}
+
+void test_oam_dma_boundaries(void)
+{
     BUS BUS = {0};
     PPU ppu;
 
@@ -4217,22 +4757,28 @@ void test_dma_loop_integration(void) {
         bus_write_byte(&BUS, 0xC000 + i, (uint8_t)(i + 1));
     }
 
-    // Start DMA.
+    // Start DMA from C000.
     bus_write_byte(&BUS, 0xFF46, 0xC0);
 
-    // Simulate CPU steps, each advancing 4 T-cycles.
-    while (BUS.dma_active) {
-        bus_update_dma(&BUS, 4);
-    }
+    // Startup delay.
+    bus_update_dma(&BUS, 4);
+    assert(BUS.dma_index == 0);
 
-    // Verify the transfer.
+    // Transfer all 160 bytes.
+    bus_update_dma(&BUS, 640);
+
+    assert(BUS.dma_active == 0);
     assert(BUS.dma_index == 0xA0);
 
-    for (int i = 0; i < 0xA0; i++) {
-        assert(ppu.oam[i] == (uint8_t)(i + 1));
-    }
+    // Verify first, middle, and last bytes.
+    assert(ppu.oam[0] == 1);
+    assert(ppu.oam[79] == 80);
+    assert(ppu.oam[159] == 160);
 
-    printf("DMA loop integration test passed!\n");
+    // Ensure no transfer beyond OAM.
+    assert(BUS.dma_index == 0xA0);
+
+    printf("OAM DMA boundary test passed!\n");
 }
 
 void test_cpu(void) {
@@ -4289,5 +4835,7 @@ void test_ppu(void) {
     test_dma_cpu_access();
     test_dma_cpu_access_1();
     test_dma_loop_integration();
+    test_oam_dma_restart();
+    test_oam_dma_boundaries();
 
 }

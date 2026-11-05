@@ -39,21 +39,50 @@ uint8_t timer_read_register(TIMER *timer, uint16_t address) {
 
 void timer_write_register(TIMER *timer, uint16_t address, uint8_t value) {
     switch (address) {
-        case 0xFF04:
+        case 0xFF04: // added glitch
+        {
+            int old_signal = timer_signal(timer);
             timer->divider = 0;
+            int new_signal = timer_signal(timer);
+
+            if (old_signal && !new_signal && timer->overflow_delay == 0) {
+                timer->tima++;
+                if (timer->tima == 0) {
+                    timer->overflow_delay = 4;
+                }
+            }
+
             break;
+        }
 
         case 0xFF05:
-            timer->tima = value;
+            if (timer->overflow_delay == 0) {
+                timer->tima = value;
+            }
             break;
 
         case 0xFF06:
             timer->tma = value;
+
+            if (timer->overflow_delay == 1) {
+                timer->tima = value;
+            }
             break;
 
         case 0xFF07:
+        {
+            int old_signal = timer_signal(timer);
             timer->tac = value & 0x07;
+            int new_signal = timer_signal(timer);
+            if (old_signal && !new_signal && timer->overflow_delay == 0) {
+                timer->tima++;
+
+                if (timer->tima == 0) {
+                    timer->overflow_delay = 4;
+                }
+            }
             break;
+        }
 
         default:
             break;
@@ -76,19 +105,26 @@ static int timer_signal(TIMER *timer) {
 void timer_update(TIMER *timer, uint64_t cycles, uint8_t *interrupt_flags) {
 
     for (uint64_t i = 0; i < cycles; i++) {
-
-        int old_signal = timer_signal(timer);
-        timer->divider++;
-        int new_signal = timer_signal(timer);
-
-        // TIMA increments on a falling edge.
-        if (old_signal && !new_signal) {
-            timer->tima++;
-
-            // Handle overflow
-            if (timer->tima == 0) {
+        //Handle pending TIMA reload
+        if (timer->overflow_delay > 0) {
+            timer->overflow_delay--;
+            if (timer->overflow_delay == 0) {
                 timer->tima = timer->tma;
                 *interrupt_flags |= 0x04;
+            }
+        }
+        int old_signal = timer_signal(timer);
+
+        timer->divider++;
+
+        int new_signal = timer_signal(timer);
+
+        //TIMA increments on falling edge
+        if (old_signal && !new_signal && timer->overflow_delay == 0) {
+            timer->tima++;
+
+            if (timer->tima == 0) {
+                timer->overflow_delay = 4;
             }
         }
     }

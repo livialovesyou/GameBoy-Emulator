@@ -23,7 +23,7 @@ int main(void) {
     BUS.ppu = &ppu;
     BUS.timer = &timer;
 
-    bool running = true;
+    bool running = false;
 
     while (running) {
         //Update PPU after every instruction
@@ -48,6 +48,19 @@ int main(void) {
 
     test_cpu();
     test_ppu();
+    test_timer_div();
+    test_timer_frequency();
+    test_timer_overflow();
+    test_timer_tima_write_during_overflow();
+    test_timer_tma_write_during_overflow();
+    test_timer_div_glitch();
+    test_timer_tac_glitch();
+    test_timer_bus_interrupt();
+    test_timer_registers();
+    test_cpu_timer_integration();
+    test_cpu_halt_timer_wakeup();
+    test_cpu_halt_wakeup_ime_disabled();
+    test_cpu_halt_bug_execution();
 
 
     return 0;

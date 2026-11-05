@@ -11,6 +11,7 @@ typedef struct TIMER {
     uint8_t tima;
     uint8_t tma;
     uint8_t tac;
+    uint8_t overflow_delay;
 } TIMER;
 
 void timer_init(TIMER *timer);

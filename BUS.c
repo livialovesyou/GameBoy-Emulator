@@ -103,7 +103,7 @@ uint8_t bus_read_byte_dma(BUS *BUS, uint16_t address) {
 //Write a byte into wram
 void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
 
-    if (BUS->dma_active) {
+    if (BUS->dma_active && address != 0xFF46) {
         if (address < 0xFF80 || address > 0xFFFE) {
             return;
         }
@@ -124,6 +124,7 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
             BUS->dma_source = (uint16_t)value << 8;
             BUS->dma_index = 0;
             BUS->dma_cycle_counter = 0;
+            BUS->dma_startup_delay = 4;
             break;
         }
 
@@ -199,6 +200,10 @@ void bus_update_dma(BUS *BUS, uint64_t cycles) {
     }
 
     for (uint64_t i = 0; i < cycles; i++) {
+        if (BUS->dma_startup_delay > 0) {
+            BUS->dma_startup_delay--;
+            continue;
+        }
         BUS->dma_cycle_counter++;
 
         if (BUS->dma_cycle_counter == 4) {

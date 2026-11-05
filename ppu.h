@@ -67,6 +67,16 @@ typedef struct {
     int oam_index;
 } Sprite;
 
+typedef struct {
+    uint8_t color;
+} Pixel;
+
+typedef struct {
+    Pixel pixels[16];
+    uint8_t head;
+    uint8_t count;
+} PixelFIFO;
+
 
 void ppu_init(PPU *ppu);
 void ppu_decode_tile(PPU *ppu, uint16_t tile_address, uint8_t pixels[8][8]);

@@ -61,6 +61,24 @@ void test_oam_dma(void);
 void test_dma_cpu_access(void);
 void test_dma_cpu_access_1(void);
 void test_dma_loop_integration(void);
+void test_oam_dma_restart(void);
+void test_oam_dma_boundaries(void);
+
+void test_timer_div(void);
+void test_timer_frequency(void);
+void test_timer_overflow(void);
+void test_timer_tima_write_during_overflow(void);
+void test_timer_tma_write_during_overflow(void);
+void test_timer_div_glitch(void);
+void test_timer_tac_glitch(void);
+void test_timer_bus_interrupt(void);
+void test_timer_registers(void);
+void test_cpu_timer_integration(void);
+void test_cpu_halt_timer_wakeup(void);
+void test_cpu_halt_wakeup_ime_disabled(void);
+void test_cpu_halt_bug_execution(void);
+
 
 void test_cpu(void);
 void test_ppu(void);
+void test_timer(void);
