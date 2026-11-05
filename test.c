@@ -4781,6 +4781,184 @@ void test_oam_dma_boundaries(void)
     printf("OAM DMA boundary test passed!\n");
 }
 
+void test_ppu_fifo(void)
+{
+    PixelFIFO fifo = {0};
+    uint8_t color;
+
+    ppu_fifo_reset(&fifo);
+
+    assert(fifo.count == 0);
+
+    // Push three pixels.
+    ppu_fifo_push(&fifo, 1);
+    ppu_fifo_push(&fifo, 2);
+    ppu_fifo_push(&fifo, 3);
+
+    assert(fifo.count == 3);
+
+    // Pixels must come out in FIFO order.
+    assert(ppu_fifo_pop(&fifo, &color) == 1);
+    assert(color == 1);
+
+    assert(ppu_fifo_pop(&fifo, &color) == 1);
+    assert(color == 2);
+
+    assert(ppu_fifo_pop(&fifo, &color) == 1);
+    assert(color == 3);
+
+    // FIFO must now be empty.
+    assert(fifo.count == 0);
+    assert(ppu_fifo_pop(&fifo, &color) == 0);
+
+    printf("PPU FIFO test passed!\n");
+}
+
+void test_ppu_fetcher(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    // Enable unsigned tile addressing and select tile map 0x9800.
+    ppu.lcdc = 0x10;
+
+    ppu.ly = 0;
+    ppu.scy = 0;
+
+    // Background tile map entry selects tile 0.
+    ppu.vram[0x1800] = 0;
+
+    // Tile 0, row 0.
+    ppu.vram[0x0000] = 0xAA;
+    ppu.vram[0x0001] = 0xCC;
+
+    // Reset FIFO and fetcher.
+    ppu_fifo_reset(&ppu.bg_fifo);
+    ppu.fetcher_step = 0;
+    ppu.fetcher_cycle = 0;
+    ppu.fetcher_x = 0;
+
+    // Four stages, each taking two calls.
+    for (int i = 0; i < 8; i++) {
+        ppu_fetcher_update(&ppu);
+    }
+
+    // Verify fetched tile data.
+    assert(ppu.fetcher_tile == 0);
+    assert(ppu.fetcher_low == 0xAA);
+    assert(ppu.fetcher_high == 0xCC);
+
+    // Verify FIFO contains eight pixels.
+    assert(ppu.bg_fifo.count == 8);
+
+    uint8_t expected[8] = {
+        3, 2, 1, 0, 3, 2, 1, 0
+    };
+
+    // Verify pixel order.
+    for (int i = 0; i < 8; i++) {
+        uint8_t pixel = 0;
+
+        assert(ppu_fifo_pop(&ppu.bg_fifo, &pixel));
+        assert(pixel == expected[i]);
+    }
+
+    // Verify FIFO is empty.
+    assert(ppu.bg_fifo.count == 0);
+}
+
+void test_ppu_fetcher_multiple_tiles(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x10;
+    ppu.ly = 0;
+    ppu.scy = 0;
+
+    // Two consecutive background map entries.
+    ppu.vram[0x1800] = 0;
+    ppu.vram[0x1801] = 1;
+
+    // Tile 0: all pixels have color index 1.
+    for (int row = 0; row < 8; row++) {
+        ppu.vram[row * 2] = 0xFF;
+        ppu.vram[row * 2 + 1] = 0x00;
+    }
+
+    // Tile 1: all pixels have color index 2.
+    for (int row = 0; row < 8; row++) {
+        ppu.vram[16 + row * 2] = 0x00;
+        ppu.vram[16 + row * 2 + 1] = 0xFF;
+    }
+
+    ppu_fifo_reset(&ppu.bg_fifo);
+    ppu.fetcher_step = 0;
+    ppu.fetcher_cycle = 0;
+    ppu.fetcher_x = 0;
+
+    // Fetch the first tile.
+    for (int i = 0; i < 8; i++) {
+        ppu_fetcher_update(&ppu);
+    }
+
+    assert(ppu.bg_fifo.count == 8);
+
+    // Fetcher should wait because the FIFO contains more than 8 pixels.
+    for (int i = 0; i < 8; i++) {
+        ppu_fifo_pop(&ppu.bg_fifo, &(uint8_t){0});
+    }
+
+    // Fetch the second tile.
+    for (int i = 0; i < 8; i++) {
+        ppu_fetcher_update(&ppu);
+    }
+
+    assert(ppu.bg_fifo.count == 8);
+    assert(ppu.fetcher_x == 2);
+
+    // All pixels from the second tile should have color index 2.
+    for (int i = 0; i < 8; i++) {
+        uint8_t pixel = 0;
+        assert(ppu_fifo_pop(&ppu.bg_fifo, &pixel));
+        assert(pixel == 2);
+    }
+
+    assert(ppu.bg_fifo.count == 0);
+}
+
+void test_ppu_output_pixel(void) {
+    PPU ppu;
+    ppu_init(&ppu);
+
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu.ly = 0;
+    ppu.output_x = 0;
+
+    // Identity palette:
+    // Color indices 0, 1, 2, 3 map to 0, 1, 2, 3.
+    ppu.bgp = 0xE4;
+
+    ppu_fifo_reset(&ppu.bg_fifo);
+
+    ppu_fifo_push(&ppu.bg_fifo, 0);
+    ppu_fifo_push(&ppu.bg_fifo, 1);
+    ppu_fifo_push(&ppu.bg_fifo, 2);
+    ppu_fifo_push(&ppu.bg_fifo, 3);
+
+    // Output four pixels.
+    for (int i = 0; i < 4; i++) {
+        ppu_output_pixel(&ppu, framebuffer);
+    }
+
+    assert(framebuffer[0][0] == 0);
+    assert(framebuffer[0][1] == 1);
+    assert(framebuffer[0][2] == 2);
+    assert(framebuffer[0][3] == 3);
+
+    assert(ppu.output_x == 4);
+    assert(ppu.bg_fifo.count == 0);
+}
+
 void test_cpu(void) {
     test_cpu_registers_1();
     test_cpu_flags_1();
@@ -4837,5 +5015,25 @@ void test_ppu(void) {
     test_dma_loop_integration();
     test_oam_dma_restart();
     test_oam_dma_boundaries();
+    test_ppu_fifo();
+    test_ppu_fetcher();
+    test_ppu_fetcher_multiple_tiles();
+    test_ppu_output_pixel;
 
+}
+
+void test_timer(void) {
+    test_timer_div();
+    test_timer_frequency();
+    test_timer_overflow();
+    test_timer_tima_write_during_overflow();
+    test_timer_tma_write_during_overflow();
+    test_timer_div_glitch();
+    test_timer_tac_glitch();
+    test_timer_bus_interrupt();
+    test_timer_registers();
+    test_cpu_timer_integration();
+    test_cpu_halt_timer_wakeup();
+    test_cpu_halt_wakeup_ime_disabled();
+    test_cpu_halt_bug_execution();
 }

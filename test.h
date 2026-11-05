@@ -64,6 +64,13 @@ void test_dma_loop_integration(void);
 void test_oam_dma_restart(void);
 void test_oam_dma_boundaries(void);
 
+
+void test_ppu_fifo(void);
+void test_ppu_fetcher(void);
+void test_ppu_fetcher_multiple_tiles(void);
+void test_ppu_output_pixel(void);
+
+
 void test_timer_div(void);
 void test_timer_frequency(void);
 void test_timer_overflow(void);
@@ -77,6 +84,7 @@ void test_cpu_timer_integration(void);
 void test_cpu_halt_timer_wakeup(void);
 void test_cpu_halt_wakeup_ime_disabled(void);
 void test_cpu_halt_bug_execution(void);
+
 
 
 void test_cpu(void);

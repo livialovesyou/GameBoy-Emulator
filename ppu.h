@@ -32,6 +32,17 @@
 
 typedef struct BUS BUS;
 
+
+typedef struct {
+    uint8_t color;
+} Pixel;
+
+typedef struct {
+    Pixel pixels[16];
+    uint8_t head;
+    uint8_t count;
+} PixelFIFO;
+
 typedef struct PPU {
     uint8_t vram[VRAM_SIZE]; // VRAM
     uint8_t oam[OAM_SIZE]; //Object Attribute Matrix
@@ -57,6 +68,20 @@ typedef struct PPU {
     uint8_t stat_irq_line;
     uint8_t lcd_was_enabled;
 
+
+    //FIFO
+    PixelFIFO bg_fifo; //Holds pixels waiting to be displayed
+
+    uint8_t fetcher_x;  //Current tile-map X position
+    uint8_t fetcher_tile;   //Tile number being fetched
+    uint8_t fetcher_low;    //Low bitplane byte
+    uint8_t fetcher_high;   //High bitplane byte
+    uint8_t fetcher_step;   //Current fetcher stage
+    uint8_t fetcher_cycle;  //Timing within a fetcher stage
+
+    uint16_t output_x;  //Current screen X coordinate
+    uint8_t discard_pixels; //	Pixels discarded for SCX fine scrolling
+
 } PPU;
 
 typedef struct {
@@ -67,15 +92,7 @@ typedef struct {
     int oam_index;
 } Sprite;
 
-typedef struct {
-    uint8_t color;
-} Pixel;
 
-typedef struct {
-    Pixel pixels[16];
-    uint8_t head;
-    uint8_t count;
-} PixelFIFO;
 
 
 void ppu_init(PPU *ppu);
@@ -102,3 +119,10 @@ uint8_t ppu_get_sprite_color(PPU *ppu, Sprite *sprite, uint8_t color_index);
 void ppu_sort_sprites(Sprite sprites[], int count);
 int ppu_vram_accessible(PPU *ppu);
 int ppu_oam_accessible(PPU *ppu);
+
+void ppu_fifo_reset(PixelFIFO *fifo);
+void ppu_fifo_push(PixelFIFO *fifo, uint8_t color);
+int ppu_fifo_pop(PixelFIFO *fifo, uint8_t *color);
+void ppu_fetcher_update(PPU *ppu);
+void ppu_output_pixel(PPU *ppu, uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH]);
+void ppu_start_drawing(PPU *ppu);

@@ -283,6 +283,7 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
             else if (boundary == 252)
             {
                 ppu->mode = PPU_MODE_HBLANK;
+                ppu_start_drawing(ppu);
 
                 // Render the completed scanline.
                 ppu_render_scanline(ppu, framebuffer);
@@ -761,4 +762,126 @@ int ppu_oam_accessible(PPU *ppu)
 
     return ppu->mode != PPU_MODE_OAM &&
            ppu->mode != PPU_MODE_DRAWING;
+}
+
+void ppu_fifo_reset(PixelFIFO *fifo) {
+    fifo->head = 0;
+    fifo->count = 0;
+}
+
+void ppu_fifo_push(PixelFIFO *fifo, uint8_t color) {
+    if (fifo->count >= 16) {
+        return;
+    }
+    uint8_t index = (fifo->head + fifo->count) % 16;
+
+    fifo->pixels[index].color = color;
+    fifo->count++;
+}
+
+int ppu_fifo_pop(PixelFIFO *fifo, uint8_t *color) {
+    if (fifo->count == 0) {
+        return 0;
+    }
+
+    *color = fifo->pixels[fifo->head].color;
+    fifo->head = (fifo->head + 1) % 16;
+    fifo->count--;
+    return 1;
+}
+
+void ppu_fetcher_update(PPU *ppu) {
+    if (++ppu->fetcher_cycle < 2) {
+        return;
+    }
+    ppu->fetcher_cycle = 0;
+
+    switch (ppu->fetcher_step) {
+        case 0: {
+            uint16_t tile_map_address = (ppu->lcdc & 0x08) ? 0x9C00 : 0x9800;
+            uint8_t tile_x = ppu->fetcher_x & 31;
+            uint8_t tile_y = ((ppu->ly + ppu->scy) / 8) & 31;
+
+            uint16_t map_address = tile_map_address + tile_y * 32 + tile_x;
+
+            ppu->fetcher_tile = ppu->vram[map_address - 0x8000];
+            ppu->fetcher_step = 1;
+            break;
+        }
+        case 1: {
+            uint16_t tile_address;
+            if (ppu->lcdc & 0x10) {
+                tile_address = 0x8000 + (uint16_t)ppu->fetcher_tile * 16;
+            } else {
+                tile_address = 0x9000 + (int8_t)ppu->fetcher_tile * 16;
+            }
+
+            uint8_t row = (ppu->ly + ppu->scy) & 7;
+
+            ppu->fetcher_low = ppu->vram[tile_address - 0x8000 + row * 2];
+            ppu->fetcher_step = 2;
+            break;
+        }
+        case 2: {
+            uint16_t tile_address;
+            if (ppu->lcdc & 0x10) {
+                tile_address = 0x8000 + (uint16_t)ppu->fetcher_tile * 16;
+            } else {
+                tile_address = 0x9000 + (int8_t)ppu->fetcher_tile * 16;
+            }
+
+            uint8_t row = (ppu->ly + ppu->scy) & 7;
+            ppu->fetcher_high = ppu->vram[tile_address - 0x8000 + row * 2 + 1];
+            ppu->fetcher_step = 3;
+            break;
+        }
+        case 3: {
+            if (ppu->bg_fifo.count > 8) {
+                break;
+            }
+
+            for (int bit = 7; bit >= 0; bit--) {
+                uint8_t color =
+                    ((ppu->fetcher_high >> bit) & 1) << 1 |
+                        ((ppu->fetcher_low >> bit) & 1);
+                ppu_fifo_push(&ppu->bg_fifo, color);
+            }
+            ppu->fetcher_x++;
+            ppu->fetcher_step = 0;
+            break;
+        }
+    }
+}
+
+void ppu_output_pixel(PPU *ppu, uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH]) {
+
+    uint8_t color_index = 0;
+
+    if (!ppu_fifo_pop(&ppu->bg_fifo, &color_index)) {
+        return;
+    }
+
+    if (ppu->discard_pixels > 0) {
+        ppu->discard_pixels--;
+        return;
+    }
+
+    if (ppu->output_x >= SCREEN_WIDTH) {
+        return;
+    }
+
+    uint8_t color = ppu_get_bg_color(ppu, color_index);
+
+    framebuffer[ppu->ly][ppu->output_x] = color;
+    ppu->output_x++;
+}
+
+void ppu_start_drawing(PPU *ppu) {
+    ppu_fifo_reset(&ppu->bg_fifo);
+
+    ppu->fetcher_step = 0;
+    ppu->fetcher_cycle = 0;
+    ppu->fetcher_x = 0;
+    ppu->output_x = 0;
+    ppu->discard_pixels = ppu->scx & 7;
 }
