@@ -5,6 +5,7 @@
 #include "bus.h"
 #include "ppu.h"
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 void ppu_init(PPU *ppu) {
@@ -14,6 +15,7 @@ void ppu_init(PPU *ppu) {
     ppu->previous_mode = PPU_MODE_OAM;
     ppu->ly = 0;
     ppu->dot = 0;
+    //ppu->frame_ready = 1;
 
     ppu->window_line = 0;
     ppu->lcd_was_enabled = 0;
@@ -121,7 +123,7 @@ uint8_t ppu_read_register(PPU *ppu, uint16_t address) {
 
 void ppu_write_register(PPU *ppu, uint16_t address, uint8_t value) {
     switch (address) {
-        case REG_LCDC:
+        case 0xFF40:
             ppu->lcdc = value;
             break;
 
@@ -384,10 +386,17 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
                 ppu->window_line++;
             }
             ppu->ly++;
-
+            //printf("Scanline: %d\n", ppu->ly);
+            // if (ppu->ly % 10 == 0)
+            // {
+            //     printf("LY: %d, dot: %d, mode: %d\n",
+            //            ppu->ly, ppu->dot, ppu->mode);
+            // }
             if (ppu->ly == 144)
             {
                 BUS->interrupt_flags |= INT_VBLANK;
+                ppu->frame_ready = 1;
+                //printf("VBlank reached\n");
             }
 
             if (ppu->ly >= 154)
@@ -399,7 +408,7 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
             if (ppu->ly >= 144)
             {
                 ppu->mode = PPU_MODE_VBLANK;
-                //ppu->frame_ready = 1;
+
             }
             else
             {
@@ -900,6 +909,16 @@ void ppu_fetcher_update(PPU *ppu) {
     }
     ppu->fetcher_cycle = 0;
 
+    // if (ppu->ly == 0 && ppu->fetcher_step == 0 &&
+    // ppu->fetcher_x < 4)
+    // {
+    //     printf("Before fetch: %02X %02X %02X %02X\n",
+    //            ppu->vram[0x1800],
+    //            ppu->vram[0x1801],
+    //            ppu->vram[0x1802],
+    //            ppu->vram[0x1803]);
+    // }
+
     switch (ppu->fetcher_step) {
         case 0: {
 
@@ -924,11 +943,21 @@ void ppu_fetcher_update(PPU *ppu) {
             }
             else
             {
-                tile_x = ppu->fetcher_x & 31;
+                tile_x = ((ppu->scx / 8) + ppu->fetcher_x) & 31;
                 tile_y = ((ppu->ly + ppu->scy) / 8) & 31;
             }
 
             uint16_t map_address = tile_map_address + tile_y * 32 + tile_x;
+
+            // if (ppu->ly == 0 && ppu->fetcher_x < 4)
+            // {
+            //     printf("map=%04X tile_x=%u tile_y=%u tile_value=%u window=%u\n",
+            //            map_address,
+            //            tile_x,
+            //            tile_y,
+            //            ppu->vram[map_address - 0x8000],
+            //            ppu->window_active);
+            // }
 
             ppu->fetcher_tile = ppu->vram[map_address - 0x8000];
             ppu->fetcher_step = 1;
@@ -995,6 +1024,18 @@ void ppu_output_pixel(PPU *ppu, uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH]
     if (!ppu_fifo_pop(&ppu->bg_fifo, &bg_color_index)) {
         return;
     }
+
+    // if (ppu->ly == 0 && ppu->output_x < 4)
+    // {
+    //     printf("x=%u bg_fifo=%u bg_color=%u fetch_tile=%u low=%02X high=%02X\n",
+    //            ppu->output_x,
+    //            ppu->bg_fifo.count,
+    //            bg_color_index,
+    //            ppu->fetcher_tile,
+    //            ppu->fetcher_low,
+    //            ppu->fetcher_high);
+    // }
+
 
     if (ppu->discard_pixels > 0)
     {

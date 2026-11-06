@@ -11,6 +11,13 @@
 
 
 static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
+
+    // Cartridge ROM: 0x0000–0x7FFF
+    if (address <= 0x7FFF)
+    {
+        return BUS->rom[address];
+    }
+
     switch (address) {
 
         //timer regs
@@ -109,8 +116,13 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
         }
     }
 
-    switch (address) {
+    // ROM writes are ignored for ROM-only cartridges.
+    if (address <= 0x7FFF)
+    {
+        return;
+    }
 
+    switch (address) {
         //timer regs
         case 0xFF04:
         case 0xFF05:
@@ -128,7 +140,10 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
             break;
         }
 
-        case 0xFF40: // LCDC
+        case 0xFF40:{ // LCDC
+            printf("LCDC write: %02X\n", value);
+
+        }
         case 0xFF41: // STAT
         case 0xFF42: // SCY
         case 0xFF43: // SCX

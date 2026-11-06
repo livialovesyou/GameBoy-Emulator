@@ -36,6 +36,8 @@ add_executable(GB_Emulator main.c
         timer.h
         display.c
         display.h
+        rom.c
+        rom.h
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)

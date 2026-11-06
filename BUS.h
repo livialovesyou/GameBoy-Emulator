@@ -6,13 +6,14 @@
 
 #define WRAM_SIZE 8192
 #define HRAM_SIZE 127
+#define ROM_SIZE 0x8000
 #include <stdint.h>
 #include "ppu.h"
 
 typedef struct TIMER TIMER;
 
 typedef struct BUS {
-
+    uint8_t rom[ROM_SIZE];
     uint8_t wram[WRAM_SIZE];
     uint8_t hram[HRAM_SIZE];
     uint8_t interrupt_enable; // IE: 0xFFFF
