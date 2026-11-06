@@ -33,6 +33,23 @@
 typedef struct BUS BUS;
 
 
+typedef struct
+{
+    uint8_t color;
+    uint8_t palette;
+    uint8_t behind_bg;
+    uint8_t priority;
+    uint8_t x;
+} SpritePixel;
+
+typedef struct
+{
+    SpritePixel pixels[80];
+    uint8_t head;
+    uint8_t count;
+} SpriteFIFO;
+
+
 typedef struct {
     uint8_t color;
 } Pixel;
@@ -42,6 +59,15 @@ typedef struct {
     uint8_t head;
     uint8_t count;
 } PixelFIFO;
+
+typedef struct {
+    uint8_t y;
+    uint8_t x;
+    uint8_t tile;
+    uint8_t attributes;
+    int oam_index;
+} Sprite;
+
 
 typedef struct PPU {
     uint8_t vram[VRAM_SIZE]; // VRAM
@@ -64,6 +90,9 @@ typedef struct PPU {
     uint8_t window_active;
     uint8_t window_x;
     uint8_t window_y;
+    uint8_t window_fetch_delay;
+    uint8_t window_discard_pixels;
+    uint8_t window_used_this_line;
 
     uint16_t dot;
     uint8_t mode;
@@ -74,26 +103,24 @@ typedef struct PPU {
 
     //FIFO
     PixelFIFO bg_fifo; //Holds pixels waiting to be displayed
-
+    SpriteFIFO sprite_fifo;
     uint8_t fetcher_x;  //Current tile-map X position
     uint8_t fetcher_tile;   //Tile number being fetched
     uint8_t fetcher_low;    //Low bitplane byte
     uint8_t fetcher_high;   //High bitplane byte
     uint8_t fetcher_step;   //Current fetcher stage
     uint8_t fetcher_cycle;  //Timing within a fetcher stage
+    Sprite selected_sprites[MAX_SPRITES_PER_SCANLINE];
 
+    uint8_t sprite_count;
     uint16_t output_x;  //Current screen X coordinate
     uint8_t discard_pixels; //	Pixels discarded for SCX fine scrolling
+    uint8_t sprite_fetch_active; //whether a sprite fetch is in progress.
+    uint8_t sprite_fetch_delay; //dots remaining in the fetch.
+    uint8_t sprite_fetch_index; //which selected sprite is being fetched.
 
 } PPU;
 
-typedef struct {
-    uint8_t y;
-    uint8_t x;
-    uint8_t tile;
-    uint8_t attributes;
-    int oam_index;
-} Sprite;
 
 
 
@@ -130,3 +157,12 @@ void ppu_fetcher_update(PPU *ppu);
 void ppu_output_pixel(PPU *ppu, uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH]);
 void ppu_start_drawing(PPU *ppu);
 void ppu_check_window_start(PPU *ppu);
+void ppu_sprite_fifo_reset(SpriteFIFO *fifo);
+void ppu_sprite_fifo_push(SpriteFIFO *fifo, SpritePixel pixel);
+int ppu_sprite_fifo_pop(SpriteFIFO *fifo, SpritePixel *pixel);
+void ppu_fetch_sprite(PPU *ppu, Sprite *sprite);
+int ppu_get_sprite_fifo_pixel(PPU *ppu, int screen_x, SpritePixel *result);
+void ppu_sprite_fetch_update(PPU *ppu);
+uint8_t ppu_get_sprite_fetch_delay(PPU *ppu, Sprite *sprite);
+void ppu_merge_sprite_pixel(PPU *ppu, SpritePixel pixel);
+void ppu_sprite_fifo_remove_before(SpriteFIFO *fifo, int screen_x);

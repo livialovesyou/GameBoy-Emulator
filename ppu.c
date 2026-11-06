@@ -328,6 +328,11 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
         ppu->window_line = 0;
         ppu->stat_irq_line = 0;
         ppu->lcd_was_enabled = 0;
+
+        ppu->window_active = 0;
+        ppu->window_used_this_line = 0;
+        ppu->window_discard_pixels = 0;
+
         ppu_update_stat(ppu);
         return;
     }
@@ -352,8 +357,14 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
         if (ppu->mode == PPU_MODE_DRAWING)
         {
             ppu_check_window_start(ppu);
+
+            ppu_sprite_fetch_update(ppu);
             ppu_fetcher_update(ppu);
-            ppu_output_pixel(ppu, framebuffer);
+
+            if (!ppu->sprite_fetch_active)
+            {
+                ppu_output_pixel(ppu, framebuffer);
+            }
 
             if (ppu->output_x >= SCREEN_WIDTH)
             {
@@ -368,7 +379,7 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
         if (ppu->dot >= 456)
         {
             ppu->dot = 0;
-            if (ppu->ly < 144 && ppu->window_active)
+            if (ppu->window_used_this_line)
             {
                 ppu->window_line++;
             }
@@ -974,36 +985,88 @@ void ppu_fetcher_update(PPU *ppu) {
 
 void ppu_output_pixel(PPU *ppu, uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH]) {
 
-    uint8_t color_index = 0;
-
-    if (!ppu_fifo_pop(&ppu->bg_fifo, &color_index)) {
+    if (ppu->output_x >= SCREEN_WIDTH || ppu->bg_fifo.count == 0) {
         return;
     }
 
-    if (ppu->discard_pixels > 0) {
+    uint8_t bg_color_index = 0;
+
+    if (!ppu_fifo_pop(&ppu->bg_fifo, &bg_color_index)) {
+        return;
+    }
+
+    if (ppu->discard_pixels > 0)
+    {
         ppu->discard_pixels--;
         return;
     }
 
-    if (ppu->output_x >= SCREEN_WIDTH) {
+    if (ppu->window_discard_pixels > 0)
+    {
+        ppu->window_discard_pixels--;
         return;
     }
 
-    uint8_t color = ppu_get_bg_color(ppu, color_index);
+    uint8_t final_color = ppu_get_bg_color(ppu, bg_color_index);
 
-    framebuffer[ppu->ly][ppu->output_x] = color;
+    // Check whether a sprite has a pixel at this screen position.
+    if (ppu->lcdc & 0x02) {
+        SpritePixel sprite_pixel;
+
+        if (ppu_get_sprite_fifo_pixel(
+                ppu,
+                ppu->output_x,
+                &sprite_pixel
+            )) {
+
+            // A sprite behind a nonzero background pixel is hidden.
+            if (!sprite_pixel.behind_bg || bg_color_index == 0) {
+                uint8_t palette = sprite_pixel.palette
+                    ? ppu->obp1
+                    : ppu->obp0;
+
+                uint8_t shift = sprite_pixel.color * 2;
+                final_color = (palette >> shift) & 0x03;
+            }
+            }
+    }
+
+    framebuffer[ppu->ly][ppu->output_x] = final_color;
     ppu->output_x++;
+    ppu_sprite_fifo_remove_before(
+    &ppu->sprite_fifo,
+    ppu->output_x
+);
 }
 
 void ppu_start_drawing(PPU *ppu) {
     ppu_fifo_reset(&ppu->bg_fifo);
+    ppu_sprite_fifo_reset(&ppu->sprite_fifo);
 
+    ppu->sprite_count = ppu_get_scanline_sprites(
+    ppu,
+    ppu->ly,
+    ppu->selected_sprites
+);
+    ppu_sort_sprites(ppu->selected_sprites, ppu->sprite_count);
+
+    if (ppu->lcdc & 0x02) {
+        for (int i = 0; i < ppu->sprite_count; i++) {
+            ppu_fetch_sprite(ppu, &ppu->selected_sprites[i]);
+        }
+    }
+    ppu->window_fetch_delay = 0;
+    ppu->sprite_fetch_active = 0;
+    ppu->sprite_fetch_delay = 0;
+    ppu->sprite_fetch_index = 0;
+    ppu->window_used_this_line = 0;
     ppu->fetcher_step = 0;
     ppu->fetcher_cycle = 0;
     ppu->fetcher_x = ppu->scx >> 3;
 
     ppu->output_x = 0;
     ppu->discard_pixels = ppu->scx & 7;
+    ppu->window_discard_pixels = 0;
 
     ppu->window_active = 0;
     ppu->window_x = 0;
@@ -1011,12 +1074,12 @@ void ppu_start_drawing(PPU *ppu) {
 }
 
 void ppu_check_window_start(PPU *ppu) {
-    if (ppu->window_active) {
+    if (ppu->window_active)
         return;
-    }
+
     int window_screen_x = (int)ppu->wx - 7;
 
-    if (ppu->output_x < window_screen_x)
+    if ((int)ppu->output_x < window_screen_x)
         return;
 
     if (!(ppu->lcdc & 0x20) || !(ppu->lcdc & 0x01))
@@ -1025,16 +1088,173 @@ void ppu_check_window_start(PPU *ppu) {
     if (ppu->ly < ppu->wy || ppu->wx > 166)
         return;
 
-    if (ppu->wx > 166)
-        return;
-
-    //Switch to window fetching
+    // Switch to window fetching.
     ppu->window_active = 1;
+    ppu->window_used_this_line = 1;
 
     ppu->fetcher_x = 0;
-    ppu->discard_pixels = ppu->wx < 7 ? 7 - ppu->wx : 0;
+    ppu->window_discard_pixels = window_screen_x < 0
+    ? (uint8_t)(-window_screen_x)
+    : 0;
+
     ppu->fetcher_step = 0;
     ppu->fetcher_cycle = 0;
 
     ppu_fifo_reset(&ppu->bg_fifo);
+}
+
+void ppu_sprite_fifo_reset(SpriteFIFO *fifo) {
+    fifo->head = 0;
+    fifo->count = 0;
+}
+
+void ppu_sprite_fifo_push(SpriteFIFO *fifo, SpritePixel pixel) {
+    if (fifo->count >= 16) {
+        return;
+    }
+
+    uint8_t index = (fifo->head + fifo->count) % 16;
+    fifo->pixels[index] = pixel;
+    fifo->count++;
+}
+
+int ppu_sprite_fifo_pop(SpriteFIFO *fifo, SpritePixel *pixel) {
+    if (fifo->count == 0) {
+        return 0;
+    }
+    *pixel = fifo->pixels[fifo->head];
+    fifo->head = (fifo->head + 1) % 16;
+    fifo->count--;
+    return 1;
+}
+
+void ppu_fetch_sprite(PPU *ppu, Sprite *sprite)
+{
+    int sprite_x = sprite->x - 8;
+    int sprite_y = sprite->y - 16;
+    int sprite_height = (ppu->lcdc & 0x04) ? 16 : 8;
+
+    for (int x = 0; x < 8; x++) {
+        int screen_x = sprite_x + x;
+
+        if (screen_x < 0 || screen_x >= SCREEN_WIDTH) {
+            continue;
+        }
+
+        uint8_t color = ppu_get_sprite_pixel(
+            ppu,
+            sprite,
+            x,
+            ppu->ly - sprite_y
+        );
+
+        if (color == 0) {
+            continue;
+        }
+
+        SpritePixel pixel = {
+            .color = color,
+            .palette = (sprite->attributes & 0x10) ? 1 : 0,
+            .behind_bg = (sprite->attributes & 0x80) != 0,
+            .priority = sprite->oam_index,
+            .x = screen_x
+        };
+
+        ppu_merge_sprite_pixel(ppu, pixel);
+    }
+}
+
+int ppu_get_sprite_fifo_pixel(PPU *ppu, int screen_x, SpritePixel *result)
+{
+    for (int i = 0; i < ppu->sprite_fifo.count; i++) {
+        int index = (ppu->sprite_fifo.head + i) % 16;
+        SpritePixel *pixel = &ppu->sprite_fifo.pixels[index];
+
+        if (pixel->x == screen_x) {
+            *result = *pixel;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+void ppu_sprite_fetch_update(PPU *ppu) {
+    if (!(ppu->lcdc & 0x02)) {
+        return;
+    }
+
+    if (ppu->sprite_fetch_active) {
+        if (ppu->sprite_fetch_delay > 0) {
+            ppu->sprite_fetch_delay--;
+        }
+
+        if (ppu->sprite_fetch_delay == 0) {
+            ppu_fetch_sprite(ppu, &ppu->selected_sprites[ppu->sprite_fetch_index]);
+
+            ppu->sprite_fetch_active = 0;
+            ppu->sprite_fetch_index++;
+        }
+        return;
+    }
+
+    if (ppu->sprite_fetch_index >= ppu->sprite_count) {
+        return;
+    }
+
+    Sprite *sprite = &ppu->selected_sprites[ppu->sprite_fetch_index];
+    int sprite_screen_x = sprite->x - 8;
+    int trigger_x = sprite_screen_x + (ppu->scx & 7);
+
+    if ((int)ppu->output_x >= trigger_x) {
+        ppu->sprite_fetch_active = 1;
+        ppu->sprite_fetch_delay = ppu_get_sprite_fetch_delay(ppu, sprite);
+    }
+}
+
+uint8_t ppu_get_sprite_fetch_delay(PPU *ppu, Sprite *sprite)
+{
+    int sprite_x = sprite->x - 8;
+    int fine_scroll = ppu->scx & 7;
+
+    int alignment = (sprite_x + fine_scroll) & 7;
+
+    return (uint8_t)(11 - (alignment < 5 ? alignment : 5));
+}
+
+void ppu_merge_sprite_pixel(PPU *ppu, SpritePixel pixel)
+{
+
+    if (pixel.x < ppu->output_x)
+    {
+        return;
+    }
+    // Check whether a higher-priority sprite already owns this X position.
+    for (int i = 0; i < ppu->sprite_fifo.count; i++)
+    {
+        int index = (ppu->sprite_fifo.head + i) % 80;
+        SpritePixel *existing = &ppu->sprite_fifo.pixels[index];
+
+        if (existing->x == pixel.x)
+        {
+            // Keep the existing pixel: sprites are fetched in priority order.
+            return;
+        }
+    }
+
+    ppu_sprite_fifo_push(&ppu->sprite_fifo, pixel);
+}
+
+void ppu_sprite_fifo_remove_before(SpriteFIFO *fifo, int screen_x)
+{
+    while (fifo->count > 0)
+    {
+        SpritePixel *pixel = &fifo->pixels[fifo->head];
+
+        if (pixel->x >= screen_x)
+            break;
+
+        fifo->head = (fifo->head + 1) % 80;
+        fifo->count--;
+    }
 }

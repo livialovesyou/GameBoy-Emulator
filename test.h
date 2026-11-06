@@ -73,6 +73,14 @@ void test_ppu_scx_scroll(void);
 void test_ppu_window_fifo(void);
 void test_ppu_window_line_counter(void);
 void test_ppu_window_visibility_limits(void);
+void test_ppu_sprite_fifo(void);
+void test_ppu_sprite_over_background(void);
+void test_ppu_sprite_behind_background(void);
+void test_ppu_sprite_priority(void);
+void test_ppu_sprite_fetch_delay(void);
+void test_ppu_sprite_mode3_duration(void);
+void test_ppu_sprite_position_timing(void);
+void test_ppu_window_disabled(void);
 
 
 void test_timer_div(void);

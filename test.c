@@ -5178,7 +5178,7 @@ void test_ppu_window_visibility_limits(void)
         ppu.vram[row * 2] = 0xFF;
         ppu.vram[row * 2 + 1] = 0x00;
     }
-    
+
     BUS.ppu = &ppu;
 
     ppu.lcdc = 0xF1;
@@ -5206,6 +5206,307 @@ void test_ppu_window_visibility_limits(void)
     assert(ppu.window_line == 0);
 
     printf("PASS: Window visibility limits\n");
+}
+
+void test_ppu_sprite_fifo(void)
+{
+    SpriteFIFO fifo;
+    SpritePixel pixel;
+    PPU ppu = {0};
+
+    ppu_sprite_fifo_reset(&fifo);
+    assert(ppu.sprite_fifo.count == 0);
+
+    assert(fifo.count == 0);
+
+    SpritePixel first = {1, 0, 0, 0};
+    SpritePixel second = {2, 1, 1, 1};
+
+    ppu_sprite_fifo_push(&fifo, first);
+    ppu_sprite_fifo_push(&fifo, second);
+
+    assert(fifo.count == 2);
+
+    assert(ppu_sprite_fifo_pop(&fifo, &pixel));
+    assert(pixel.color == 1);
+    assert(pixel.palette == 0);
+
+    assert(ppu_sprite_fifo_pop(&fifo, &pixel));
+    assert(pixel.color == 2);
+    assert(pixel.palette == 1);
+    assert(pixel.behind_bg == 1);
+    assert(pixel.priority == 1);
+
+    assert(fifo.count == 0);
+    assert(!ppu_sprite_fifo_pop(&fifo, &pixel));
+
+    printf("PASS: Sprite FIFO\n");
+}
+
+void test_ppu_sprite_over_background(void)
+{
+    PPU ppu;
+    BUS BUS = {0};
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    ppu.lcdc = 0x93; // LCD, BG, unsigned tile data, sprites enabled
+    ppu.bgp = 0xE4;
+    ppu.obp0 = 0xE4;
+
+    // Background tile 0: color index 0.
+    for (int i = 0; i < 16; i++)
+        ppu.vram[i] = 0x00;
+
+    // Sprite tile 1: color index 1 across every pixel.
+    for (int i = 0; i < 8; i++)
+    {
+        ppu.vram[16 + i * 2] = 0xFF;
+        ppu.vram[16 + i * 2 + 1] = 0x00;
+    }
+
+    // Place sprite at screen position (10, 10).
+    ppu.oam[0] = 10 + 16;
+    ppu.oam[1] = 10 + 8;
+    ppu.oam[2] = 1;
+    ppu.oam[3] = 0;
+
+    ppu_update(&ppu, &BUS, 456 * 11, framebuffer);
+
+    assert(framebuffer[10][10] != framebuffer[10][9]);
+
+    printf("test_ppu_sprite_over_background passed\n");
+}
+
+void test_ppu_sprite_behind_background(void)
+{
+    PPU ppu;
+    BUS BUS = {0};
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu_init(&ppu);
+
+    BUS.ppu = &ppu;
+
+    ppu.lcdc = 0x93;
+    ppu.bgp = 0xE4;
+    ppu.obp0 = 0xE4;
+
+    // Background tile 0: color index 1.
+    for (int i = 0; i < 8; i++)
+    {
+        ppu.vram[i * 2] = 0xFF;
+        ppu.vram[i * 2 + 1] = 0x00;
+    }
+
+    // Sprite tile 1: color index 2.
+    for (int i = 0; i < 8; i++)
+    {
+        ppu.vram[16 + i * 2] = 0x00;
+        ppu.vram[16 + i * 2 + 1] = 0xFF;
+    }
+
+    ppu.oam[0] = 10 + 16;
+    ppu.oam[1] = 10 + 8;
+    ppu.oam[2] = 1;
+    ppu.oam[3] = 0x80; // Behind background.
+
+    ppu_update(&ppu, &BUS, 456 * 11, framebuffer);
+
+    // Sprite must not cover the nonzero background.
+    assert(framebuffer[10][10] == framebuffer[10][9]);
+
+    printf("test_ppu_sprite_behind_background passed\n");
+}
+
+void test_ppu_sprite_priority(void)
+{
+    PPU ppu;
+    BUS BUS;
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu_init(&ppu);
+    BUS.ppu = &ppu;
+
+    ppu.lcdc = 0x93;
+    ppu.bgp = 0xE4;
+    ppu.obp0 = 0xE4;
+    ppu.obp1 = 0x0C;
+
+    // Background tile 0: color index 0.
+    for (int i = 0; i < 16; i++)
+        ppu.vram[i] = 0x00;
+
+    // Sprite tile 1: color index 1.
+    for (int i = 0; i < 8; i++)
+    {
+        ppu.vram[16 + i * 2] = 0xFF;
+        ppu.vram[16 + i * 2 + 1] = 0x00;
+    }
+
+    // Sprite tile 2: color index 2.
+    for (int i = 0; i < 8; i++)
+    {
+        ppu.vram[32 + i * 2] = 0x00;
+        ppu.vram[32 + i * 2 + 1] = 0xFF;
+    }
+
+    // Sprite 0: X position 10, uses OBP0.
+    ppu.oam[0] = 10 + 16;
+    ppu.oam[1] = 10 + 8;
+    ppu.oam[2] = 1;
+    ppu.oam[3] = 0x00;
+
+    // Sprite 1: same position, uses OBP1.
+    ppu.oam[4] = 10 + 16;
+    ppu.oam[5] = 10 + 8;
+    ppu.oam[6] = 2;
+    ppu.oam[7] = 0x10;
+
+    ppu_update(&ppu, &BUS, 456 * 11, framebuffer);
+
+    // Sprite 0 has higher OAM priority.
+    assert(framebuffer[10][10] == 1);
+
+    printf("test_ppu_sprite_priority passed\n");
+}
+
+void test_ppu_sprite_fetch_delay(void)
+{
+    PPU ppu;
+    Sprite sprite = {0};
+
+    int previous_delay = -1;
+    int different_delays = 0;
+
+    for (int scx = 0; scx <= 7; scx++)
+    {
+        ppu_init(&ppu);
+        ppu.scx = scx;
+
+        for (int x = 8; x <= 15; x++)
+        {
+            sprite.x = x + 8;
+
+            uint8_t delay =
+                ppu_get_sprite_fetch_delay(&ppu, &sprite);
+
+            assert(delay >= 6);
+            assert(delay <= 11);
+
+            if (previous_delay != -1 && delay != previous_delay)
+            {
+                different_delays++;
+            }
+
+            previous_delay = delay;
+        }
+    }
+
+    assert(different_delays > 0);
+
+    printf("test_ppu_sprite_fetch_delay passed\n");
+}
+
+static uint16_t get_mode3_duration(
+    uint8_t enable_sprites,
+    uint8_t sprite_x,
+    uint8_t scx) {
+    PPU ppu;
+    BUS bus;
+    uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+
+    ppu_init(&ppu);
+    bus.ppu = &ppu;
+
+    ppu.lcdc = enable_sprites ? 0x93 : 0x91;
+    ppu.scx = scx;
+    ppu.bgp = 0xE4;
+    ppu.obp0 = 0xE4;
+
+    // Make sprite tile 1 visible.
+    for (int i = 0; i < 8; i++)
+    {
+        ppu.vram[16 + i * 2] = 0xFF;
+        ppu.vram[16 + i * 2 + 1] = 0;
+    }
+
+    if (enable_sprites)
+    {
+        ppu.oam[0] = 16;
+        ppu.oam[1] = sprite_x + 8;
+        ppu.oam[2] = 1;
+        ppu.oam[3] = 0;
+    }
+
+    ppu_update(&ppu, &bus, 80, framebuffer);
+
+    uint16_t start_dot = ppu.dot;
+    uint16_t elapsed = 0;
+
+    while (ppu.mode == PPU_MODE_DRAWING && elapsed < 300)
+    {
+        ppu_update(&ppu, &bus, 1, framebuffer);
+        elapsed++;
+    }
+
+    assert(ppu.mode == PPU_MODE_HBLANK);
+
+    return elapsed;
+}
+    void test_ppu_sprite_mode3_duration(void)
+    {
+        uint16_t baseline = get_mode3_duration(0, 0, 0);
+
+        uint16_t with_sprite = get_mode3_duration(1, 40, 0);
+
+        assert(with_sprite > baseline);
+
+        printf("test_ppu_sprite_mode3_duration passed\n");
+    }
+
+void test_ppu_sprite_position_timing(void)
+{
+    uint16_t baseline = get_mode3_duration(0, 0, 0);
+
+    // A sprite at different screen positions should cause a fetch stall.
+    uint16_t early_sprite = get_mode3_duration(1, 8, 0);
+    uint16_t middle_sprite = get_mode3_duration(1, 40, 0);
+    uint16_t late_sprite = get_mode3_duration(1, 80, 0);
+
+    assert(early_sprite > baseline);
+    assert(middle_sprite > baseline);
+    assert(late_sprite > baseline);
+
+    // Fine scrolling should affect sprite-fetch alignment.
+    uint16_t scx_0 = get_mode3_duration(1, 40, 0);
+    uint16_t scx_3 = get_mode3_duration(1, 40, 3);
+    uint16_t scx_7 = get_mode3_duration(1, 40, 7);
+
+    assert(scx_0 != scx_3 || scx_3 != scx_7);
+
+    printf("test_ppu_sprite_position_timing passed\n");
+}
+
+void test_ppu_window_disabled(void)
+{
+    PPU ppu;
+
+    ppu_init(&ppu);
+
+    ppu.lcdc = 0x91; // LCD and BG enabled, window disabled.
+    ppu.wx = 7;
+    ppu.wy = 0;
+    ppu.ly = 0;
+
+    ppu_check_window_start(&ppu);
+
+    assert(ppu.window_active == 0);
+    assert(ppu.window_used_this_line == 0);
+
+    printf("test_ppu_window_disabled passed\n");
 }
 
 void test_cpu(void) {
@@ -5272,6 +5573,14 @@ void test_ppu(void) {
     test_ppu_window_fifo();
     test_ppu_window_line_counter();
     test_ppu_window_visibility_limits();
+    test_ppu_sprite_fifo();
+    test_ppu_sprite_over_background();
+    test_ppu_sprite_behind_background();
+    test_ppu_sprite_priority();
+    test_ppu_sprite_fetch_delay();
+    test_ppu_sprite_mode3_duration();
+    test_ppu_sprite_position_timing();
+    test_ppu_window_disabled();
 
 }
 
