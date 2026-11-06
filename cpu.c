@@ -8,7 +8,31 @@
 
 #include "BUS.h"
 
+void cpu_init(CPU *cpu) {
+    cpu->a = 0x01;
+    cpu->f = 0xB0;
 
+    cpu->b = 0x00;
+    cpu->c = 0x13;
+
+    cpu->d = 0x00;
+    cpu->e = 0xD8;
+
+    cpu->h = 0x01;
+    cpu->l = 0x4D;
+
+    cpu->sp = 0xFFFE;
+    cpu->pc = 0x0100;
+
+    cpu->ime = 0;
+    cpu->ime_scheduled = 0;
+
+    cpu->halted = 0;
+    cpu->stopped = 0;
+    cpu->halt_bug = 0;
+
+    cpu->cycles = 0;
+}
 
 
 static uint8_t cpu_fetch_byte(CPU *cpu, BUS *BUS) {

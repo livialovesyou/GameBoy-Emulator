@@ -21,7 +21,7 @@ int main(void) {
     }
 
     //Initialize CPU, BUS and PPU
-    CPU cpu = {0};
+    CPU cpu;
     BUS BUS = {0};
     TIMER timer;
     PPU ppu;
@@ -34,14 +34,14 @@ int main(void) {
     // }
 
 
-
+    cpu_init(&cpu);
     ppu_init(&ppu);
     timer_init(&timer);
 
     BUS.ppu = &ppu;
     BUS.timer = &timer;
 
-    if (!rom_load("tetris.gb", BUS.rom))
+    if (!rom_load("TETRIS.gb", BUS.rom))
     {
         return 1;
     }
@@ -72,6 +72,14 @@ int main(void) {
     uint64_t frequency = SDL_GetPerformanceFrequency();
     uint64_t frame_start = SDL_GetPerformanceCounter();
     uint64_t fps_timer = SDL_GetPerformanceCounter();
+
+
+
+    printf("ROM entry: %02X %02X %02X %02X\n",
+       BUS.rom[0x100],
+       BUS.rom[0x101],
+       BUS.rom[0x102],
+       BUS.rom[0x103]);
 
     //MAIN LOOP
     int running = 1;

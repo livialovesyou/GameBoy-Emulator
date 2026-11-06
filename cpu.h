@@ -34,6 +34,9 @@ typedef struct {
 
 } CPU;
 
+
+void cpu_init(CPU *cpu);
+
 //Read/Write BC
 static inline uint16_t cpu_get_BC(const CPU *cpu) {
         return((uint16_t)cpu->b << 8 ) | (uint16_t)cpu->c;

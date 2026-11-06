@@ -15,7 +15,11 @@ int rom_load(const char *filename, uint8_t rom[ROM_SIZE]) {
         return 0;
     }
 
-    size_t bytes_read = fread(rom, 1, ROM_SIZE, file);
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    rewind(file);
+
+    size_t bytes_read = fread(rom, 1, size, file);
 
     if (ferror(file)) {
         fprintf(stderr, "Error reading %s\n", filename);
