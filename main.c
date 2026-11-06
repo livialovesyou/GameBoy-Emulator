@@ -22,7 +22,7 @@ int main(void) {
 
     //Initialize CPU, BUS and PPU
     CPU cpu;
-    BUS BUS = {0};
+    BUS BUS;
     TIMER timer;
     PPU ppu;
     uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
@@ -37,21 +37,28 @@ int main(void) {
     cpu_init(&cpu);
     ppu_init(&ppu);
     timer_init(&timer);
+    bus_init(&BUS, &ppu, &timer);
 
-    BUS.ppu = &ppu;
-    BUS.timer = &timer;
-
-    if (!rom_load("TETRIS.gb", BUS.rom))
+    if (!rom_load("HEIYANKO.gb", BUS.rom))
     {
         return 1;
     }
+    printf("Cartridge type: %02X\n", BUS.rom[0x147]);
+    printf("ROM size: %02X\n", BUS.rom[0x148]);
 
-    ppu.lcdc = 0x91; // LCD enabled, background enabled, unsigned tile data
-    ppu.bgp = 0xE4;  // Standard DMG grayscale palette
-    ppu.scx = 0;
-    ppu.scy = 0;
-    ppu.wx = 167;    // Window outside the visible screen
-    ppu.wy = 0;
+    ppu.lcdc = 0x91;
+    ppu.stat = 0x80;
+    ppu.scy = 0x00;
+    ppu.scx = 0x00;
+    ppu.ly  = 0x00;
+    ppu.lyc = 0x00;
+    ppu.bgp = 0xFC;
+    ppu.obp0 = 0xFF;
+    ppu.obp1 = 0xFF;
+    ppu.wy = 0x00;
+    ppu.wx = 0x00;
+    BUS.interrupt_enable = 0x00;
+    BUS.interrupt_flags = 0x01;
     // // Tile 0: alternating black and white vertical stripes.
     // for (int row = 0; row < 8; row++)
     // {
@@ -84,13 +91,36 @@ int main(void) {
     //MAIN LOOP
     int running = 1;
     while (running) {
+
+
         //Update PPU after every instruction
-        // uint64_t old_cycles = cpu.cycles;
+         uint64_t old_cycles = cpu.cycles;
+         cpu_step(&cpu, &BUS);
+
+         uint64_t elapsed = cpu.cycles - old_cycles;
+
+       // uint64_t elapsed = 4;
+        // static uint64_t instruction_count = 0;
         //
-        // cpu_step(&cpu, &BUS);
+        // instruction_count++;
         //
-        // uint64_t elapsed = cpu.cycles - old_cycles;
-        uint64_t elapsed = 4;
+        // if (instruction_count % 100000 == 0)
+        // {
+        //     printf(
+        //         "PC=%04X LCDC=%02X STAT=%02X LY=%d "
+        //         "SCX=%02X SCY=%02X BGP=%02X "
+        //         "VRAM[0]=%02X VRAM[1]=%02X\n",
+        //         cpu.pc,
+        //         ppu.lcdc,
+        //         ppu.stat,
+        //         ppu.ly,
+        //         ppu.scx,
+        //         ppu.scy,
+        //         ppu.bgp,
+        //         ppu.vram[0],
+        //         ppu.vram[1]
+        //     );
+        // }
 
         bus_update_dma(&BUS, elapsed);
         ppu_update(&ppu, &BUS, elapsed, framebuffer);
@@ -118,17 +148,13 @@ int main(void) {
 
 
             uint64_t frame_end = SDL_GetPerformanceCounter();
-
             double elapsed_seconds =
                 (double)(frame_end - frame_start) / frequency;
-
             if (elapsed_seconds < target_frame_time)
             {
                 double remaining_seconds = target_frame_time - elapsed_seconds;
-
                 SDL_Delay((Uint32)(remaining_seconds * 1000.0));
             }
-
             frame_start = SDL_GetPerformanceCounter();
         }
     }

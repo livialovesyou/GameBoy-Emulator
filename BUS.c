@@ -6,8 +6,20 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "timer.h"
+
+void bus_init(BUS *BUS, PPU *ppu, TIMER *timer)
+{
+    memset(BUS, 0, sizeof(*BUS));
+
+    BUS->ppu = ppu;
+    BUS->timer = timer;
+    BUS->joypad_select = 0x30;
+    BUS->joypad_buttons = 0x0F;
+    BUS->joypad_directions = 0x0F;
+}
 
 
 static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
@@ -16,6 +28,10 @@ static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
     if (address <= 0x7FFF)
     {
         return BUS->rom[address];
+    }
+
+    if (address == 0xFF00) {
+        return bus_read_joypad(BUS);
     }
 
     switch (address) {
@@ -37,6 +53,12 @@ static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
         case 0xFF4A: // WY
         case 0xFF4B: // WX
             return ppu_read_register(BUS->ppu, address);
+
+        case 0xFF48:
+            return BUS->ppu->obp0;
+
+        case 0xFF49:
+            return BUS->ppu->obp1;
     }
 
 
@@ -154,6 +176,13 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
         case 0xFF4B: // WX
             ppu_write_register(BUS->ppu, address, value);
             return;
+        case 0xFF48:
+            ppu_write_register(BUS->ppu, address, value);
+            return;
+
+        case 0xFF49:
+            ppu_write_register(BUS->ppu, address, value);
+            return;
     }
 
 
@@ -234,4 +263,19 @@ void bus_update_dma(BUS *BUS, uint64_t cycles) {
             }
         }
     }
+}
+
+static uint8_t bus_read_joypad(BUS *BUS)
+{
+    uint8_t result = 0x0F;
+
+    if (!(BUS->joypad_select & 0x10)) {
+        result &= BUS->joypad_directions;
+    }
+
+    if (!(BUS->joypad_select & 0x20)) {
+        result &= BUS->joypad_buttons;
+    }
+
+    return 0xC0 | BUS->joypad_select | result;
 }

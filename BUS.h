@@ -31,10 +31,17 @@ typedef struct BUS {
     //Serial Port
     uint8_t serial_data;
     uint8_t serial_control;
+
+    //Buttons
+    uint8_t joypad_select;
+    uint8_t joypad_buttons;
+    uint8_t joypad_directions;
 } BUS;
 
+void bus_init(BUS *BUS, PPU *ppu, TIMER *timer);
 uint8_t bus_read_byte(BUS *BUS, uint16_t address);
 void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value);
 void bus_update_dma(BUS *BUS, uint64_t cycles);
+static uint8_t bus_read_joypad(BUS *BUS);
 
 //GB_EMULATOR_BUS_H

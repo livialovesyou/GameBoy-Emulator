@@ -12,7 +12,7 @@ int display_init(DISPLAY *display) {
         return 0;
     }
 
-    display->window = SDL_CreateWindow("GB Emulator", 640, 576, 0);
+    display->window = SDL_CreateWindow("Game Girl Emulator", 640, 576, 0);
 
     if (!display->window)
     {

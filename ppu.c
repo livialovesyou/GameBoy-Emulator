@@ -141,6 +141,13 @@ void ppu_write_register(PPU *ppu, uint16_t address, uint8_t value) {
             break;
         case 0xFF4A: ppu->wy = value; break;
         case 0xFF4B: ppu->wx = value; break;
+        case 0xFF48:
+            ppu->obp0 = value;
+            break;
+
+        case 0xFF49:
+            ppu->obp1 = value;
+            break;
 
         default:
             break;
@@ -1274,7 +1281,7 @@ void ppu_merge_sprite_pixel(PPU *ppu, SpritePixel pixel)
     // Check whether a higher-priority sprite already owns this X position.
     for (int i = 0; i < ppu->sprite_fifo.count; i++)
     {
-        int index = (ppu->sprite_fifo.head + i) % 80;
+        int index = (ppu->sprite_fifo.head + i) % 16;
         SpritePixel *existing = &ppu->sprite_fifo.pixels[index];
 
         if (existing->x == pixel.x)
@@ -1296,7 +1303,7 @@ void ppu_sprite_fifo_remove_before(SpriteFIFO *fifo, int screen_x)
         if (pixel->x >= screen_x)
             break;
 
-        fifo->head = (fifo->head + 1) % 80;
+        fifo->head = (fifo->head + 1) % 16;
         fifo->count--;
     }
 }

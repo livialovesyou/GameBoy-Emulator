@@ -243,6 +243,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
     if (cpu->ime_scheduled == 1) {
         cpu->ime = 1;
+        cpu->ime_scheduled = 0;
     }
 
 
@@ -1353,6 +1354,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu->sp--;
             bus_write_byte(BUS, cpu->sp,(uint8_t)(return_address & 0xFF));
             cpu->pc = 0x0018;
+            cycle = 16;
             break;
 
         case 0xE7: //RST 20H // Jumps to 0x0020 and pushes the return address to the stack
@@ -2739,6 +2741,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         case 0xFB: //EI
         {
             cpu->ime_scheduled = 1;
+            break;
         }
 
         case 0x76: //HALT
