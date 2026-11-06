@@ -399,6 +399,7 @@ void ppu_update(PPU *ppu, BUS *BUS, uint64_t cycles,
             if (ppu->ly >= 144)
             {
                 ppu->mode = PPU_MODE_VBLANK;
+                //ppu->frame_ready = 1;
             }
             else
             {

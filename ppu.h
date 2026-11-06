@@ -119,6 +119,8 @@ typedef struct PPU {
     uint8_t sprite_fetch_delay; //dots remaining in the fetch.
     uint8_t sprite_fetch_index; //which selected sprite is being fetched.
 
+    uint8_t frame_ready;
+
 } PPU;
 
 

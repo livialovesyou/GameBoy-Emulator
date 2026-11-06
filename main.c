@@ -6,9 +6,18 @@
 #include "ppu.h"
 #include "bmp.h"
 #include "timer.h"
+#include "display.h"
 
+#define GB_FRAME_TIME_MS 16.74
 
 int main(void) {
+
+    DISPLAY display = {0};
+
+    if (!display_init(&display))
+    {
+        return 1;
+    }
 
     //Initialize CPU, BUS and PPU
     CPU cpu = {0};
@@ -16,6 +25,14 @@ int main(void) {
     TIMER timer;
     PPU ppu;
     uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
+    // Create a simple test pattern.
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        for (int x = 0; x < SCREEN_WIDTH; x++) {
+            framebuffer[y][x] = (x / 40) % 4;
+        }
+    }
+
+
 
     ppu_init(&ppu);
     timer_init(&timer);
@@ -23,7 +40,7 @@ int main(void) {
     BUS.ppu = &ppu;
     BUS.timer = &timer;
 
-    bool running = false;
+    int running = 1;
 
     while (running) {
         //Update PPU after every instruction
@@ -36,20 +53,23 @@ int main(void) {
         bus_update_dma(&BUS, elapsed);
         ppu_update(&ppu, &BUS, elapsed, framebuffer);
         timer_update(&timer, elapsed, &BUS.interrupt_flags);
+
+        display_process_events(&display, &running);
+
+        // if (ppu.frame_ready)
+        // {
+            ppu.frame_ready = 0;
+            display_render(&display, framebuffer);
+        //}
     }
 
-    for (int y = 0; y < SCREEN_HEIGHT; y++) {
-        for (int x = 0; x < SCREEN_WIDTH; x++) {
-            framebuffer[y][x] = (x / 40) % 4;
-        }
-    }
 
-    bmp_save("test.bmp", framebuffer);
+    //bmp_save("test.bmp", framebuffer);
 
-    test_cpu();
-    test_ppu();
-    test_timer();
+    // test_cpu();
+    // test_ppu();
+    // test_timer();
 
-
+    display_destroy(&display);
     return 0;
 }
