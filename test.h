@@ -97,6 +97,8 @@ void test_cpu_halt_timer_wakeup(void);
 void test_cpu_halt_wakeup_ime_disabled(void);
 void test_cpu_halt_bug_execution(void);
 
+void test_cpu_stop_wakeup(void);
+
 
 
 void test_cpu(void);

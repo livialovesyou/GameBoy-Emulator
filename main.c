@@ -39,7 +39,7 @@ int main(void) {
     timer_init(&timer);
     bus_init(&BUS, &ppu, &timer);
 
-    if (!rom_load("HEIYANKO.gb", BUS.rom))
+    if (!rom_load("CATRAP.gb", BUS.rom))
     {
         return 1;
     }
@@ -98,35 +98,14 @@ int main(void) {
          cpu_step(&cpu, &BUS);
 
          uint64_t elapsed = cpu.cycles - old_cycles;
+        //printf("PC: %04X\n", cpu.pc);
 
-       // uint64_t elapsed = 4;
-        // static uint64_t instruction_count = 0;
-        //
-        // instruction_count++;
-        //
-        // if (instruction_count % 100000 == 0)
-        // {
-        //     printf(
-        //         "PC=%04X LCDC=%02X STAT=%02X LY=%d "
-        //         "SCX=%02X SCY=%02X BGP=%02X "
-        //         "VRAM[0]=%02X VRAM[1]=%02X\n",
-        //         cpu.pc,
-        //         ppu.lcdc,
-        //         ppu.stat,
-        //         ppu.ly,
-        //         ppu.scx,
-        //         ppu.scy,
-        //         ppu.bgp,
-        //         ppu.vram[0],
-        //         ppu.vram[1]
-        //     );
-        // }
 
         bus_update_dma(&BUS, elapsed);
         ppu_update(&ppu, &BUS, elapsed, framebuffer);
         timer_update(&timer, elapsed, &BUS.interrupt_flags);
 
-        display_process_events(&display, &running);
+        display_process_events(&display, &running, &BUS);
         if (ppu.frame_ready)
         {
             ppu.frame_ready = 0;
@@ -139,7 +118,7 @@ int main(void) {
             double elapsed_seconds1 = (double)(now - fps_timer) / frequency;
             if (elapsed_seconds1 >= 1.0)
             {
-                printf("FPS: %.2f\n", fps_frame_count / elapsed_seconds1);
+                //printf("FPS: %.2f\n", fps_frame_count / elapsed_seconds1);
 
                 fps_frame_count = 0;
                 fps_timer = now;
@@ -159,13 +138,8 @@ int main(void) {
         }
     }
 
-
-    //bmp_save("test.bmp", framebuffer);
-
-    // test_cpu();
-    // test_ppu();
-    // test_timer();
-
     display_destroy(&display);
+
+    test_cpu();
     return 0;
 }

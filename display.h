@@ -10,6 +10,9 @@
 #define DISPLAY_HEIGHT 144
 
 #include <SDL3/SDL.h>
+
+#include "BUS.h"
+
 typedef struct {
     SDL_Window *window;
     SDL_Renderer *renderer;
@@ -18,7 +21,7 @@ typedef struct {
 
 int display_init(DISPLAY *display);
 void display_destroy(DISPLAY *display);
-void display_process_events(DISPLAY *display, int *running);
+void display_process_events(DISPLAY *display, int *running, BUS *BUS);
 void display_render(
     DISPLAY *display,
     uint8_t framebuffer[DISPLAY_HEIGHT][DISPLAY_WIDTH]

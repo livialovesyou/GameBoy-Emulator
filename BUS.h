@@ -12,6 +12,17 @@
 
 typedef struct TIMER TIMER;
 
+typedef enum {
+    JOYPAD_RIGHT,
+    JOYPAD_LEFT,
+    JOYPAD_UP,
+    JOYPAD_DOWN,
+    JOYPAD_A,
+    JOYPAD_B,
+    JOYPAD_SELECT,
+    JOYPAD_START
+} JoypadButton;
+
 typedef struct BUS {
     uint8_t rom[ROM_SIZE];
     uint8_t wram[WRAM_SIZE];
@@ -36,6 +47,7 @@ typedef struct BUS {
     uint8_t joypad_select;
     uint8_t joypad_buttons;
     uint8_t joypad_directions;
+    uint8_t stop_wake_requested;
 } BUS;
 
 void bus_init(BUS *BUS, PPU *ppu, TIMER *timer);
@@ -43,5 +55,6 @@ uint8_t bus_read_byte(BUS *BUS, uint16_t address);
 void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value);
 void bus_update_dma(BUS *BUS, uint64_t cycles);
 static uint8_t bus_read_joypad(BUS *BUS);
+void bus_set_joypad_button(BUS *BUS, JoypadButton button, uint8_t pressed);
 
 //GB_EMULATOR_BUS_H

@@ -12,7 +12,7 @@ int display_init(DISPLAY *display) {
         return 0;
     }
 
-    display->window = SDL_CreateWindow("Game Girl Emulator", 640, 576, 0);
+    display->window = SDL_CreateWindow("GB Emulator", 640, 576, 0);
 
     if (!display->window)
     {
@@ -61,7 +61,7 @@ void display_destroy(DISPLAY *display)
     SDL_Quit();
 }
 
-void display_process_events(DISPLAY *display, int *running)
+void display_process_events(DISPLAY *display, int *running, BUS *BUS)
 {
     SDL_Event event;
 
@@ -70,6 +70,46 @@ void display_process_events(DISPLAY *display, int *running)
         if (event.type == SDL_EVENT_QUIT)
         {
             *running = 0;
+        }
+
+        if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+            uint8_t pressed = (event.type == SDL_EVENT_KEY_DOWN);
+            switch (event.key.key) {
+                case SDLK_RIGHT:
+                    bus_set_joypad_button(BUS,JOYPAD_RIGHT,pressed);
+                    break;
+
+                case SDLK_LEFT:
+                    bus_set_joypad_button(BUS, JOYPAD_LEFT, pressed);
+                    break;
+
+                case SDLK_UP:
+                    bus_set_joypad_button(BUS, JOYPAD_UP, pressed);
+                    break;
+
+                case SDLK_DOWN:
+                    bus_set_joypad_button(BUS, JOYPAD_DOWN, pressed);
+                    break;
+
+                case SDLK_Z:
+                    bus_set_joypad_button(BUS, JOYPAD_A, pressed);
+                    break;
+
+                case SDLK_X:
+                    bus_set_joypad_button(BUS, JOYPAD_B, pressed);
+                    break;
+
+                case SDLK_BACKSPACE:
+                    bus_set_joypad_button(BUS, JOYPAD_SELECT, pressed);
+                    break;
+
+                case SDLK_RETURN:
+                    bus_set_joypad_button(BUS, JOYPAD_START, pressed);
+                    break;
+
+                default:
+                    break;
+            }
         }
     }
 }

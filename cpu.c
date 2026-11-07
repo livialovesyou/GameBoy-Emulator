@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 #include "BUS.h"
+#include "timer.h"
 
 void cpu_init(CPU *cpu) {
     cpu->a = 0x01;
@@ -219,7 +220,13 @@ void cpu_step(CPU *cpu, BUS *BUS) {
     uint8_t cycle = 4;
 
     if (cpu->stopped) {
-        return;
+        if (BUS->stop_wake_requested) {
+            cpu->stopped = 0;
+            BUS->stop_wake_requested = 0;
+        } else {
+            cpu->cycles += 4;
+            return;
+        }
     }
 
 
@@ -261,6 +268,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         case 0x10: // STOP
         {
             cpu_fetch_byte(cpu, BUS);
+            timer_write_register(BUS->timer, 0xFF04, 0);
             cpu->stopped = 1;
             break;
         }

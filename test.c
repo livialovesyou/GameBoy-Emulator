@@ -5490,6 +5490,45 @@ void test_ppu_sprite_position_timing(void)
     printf("test_ppu_sprite_position_timing passed\n");
 }
 
+void test_cpu_stop_wakeup(void)
+{
+    CPU cpu;
+    BUS BUS;
+    PPU ppu;
+    TIMER timer;
+
+    cpu_init(&cpu);
+    ppu_init(&ppu);
+    timer_init(&timer);
+    bus_init(&BUS, &ppu, &timer);
+
+    // STOP instruction followed by its padding byte.
+    BUS.rom[0x0100] = 0x10;
+    BUS.rom[0x0101] = 0x00;
+
+    cpu_step(&cpu, &BUS);
+
+    assert(cpu.stopped == 1);
+    assert(cpu.pc == 0x0102);
+
+    // CPU should remain stopped without a button press.
+    uint64_t old_cycles = cpu.cycles;
+    cpu_step(&cpu, &BUS);
+
+    assert(cpu.cycles == old_cycles);
+    assert(cpu.stopped == 1);
+
+    // Press A.
+    bus_set_joypad_button(&BUS, JOYPAD_A, 1);
+
+    cpu_step(&cpu, &BUS);
+
+    assert(cpu.stopped == 0);
+    assert(BUS.stop_wake_requested == 0);
+
+    printf("test_cpu_stop_wakeup passed\n");
+}
+
 void test_ppu_window_disabled(void)
 {
     PPU ppu;
@@ -5522,6 +5561,7 @@ void test_cpu(void) {
     test_cpu_opcodes_8();
     test_cpu_opcodes_9();
     test_cpu_interrupts();
+    test_cpu_stop_wakeup();
 }
 
 void test_ppu(void) {

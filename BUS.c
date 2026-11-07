@@ -19,6 +19,7 @@ void bus_init(BUS *BUS, PPU *ppu, TIMER *timer)
     BUS->joypad_select = 0x30;
     BUS->joypad_buttons = 0x0F;
     BUS->joypad_directions = 0x0F;
+    BUS->stop_wake_requested = 0;
 }
 
 
@@ -144,7 +145,13 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
         return;
     }
 
+
     switch (address) {
+
+        case 0xFF00:
+            BUS->joypad_select = value & 0x30;
+            return;
+
         //timer regs
         case 0xFF04:
         case 0xFF05:
@@ -278,4 +285,34 @@ static uint8_t bus_read_joypad(BUS *BUS)
     }
 
     return 0xC0 | BUS->joypad_select | result;
+}
+
+void bus_set_joypad_button(BUS *BUS, JoypadButton button, uint8_t pressed) {
+    uint8_t old_value = bus_read_joypad(BUS);
+    uint8_t *register_value;
+    uint8_t bit;
+
+    if (button <= JOYPAD_DOWN) {
+        register_value = &BUS->joypad_directions;
+        bit = button;
+    } else {
+        register_value = &BUS->joypad_buttons;
+        bit = button - JOYPAD_A;
+    }
+    uint8_t was_released = (*register_value & (1 << bit)) != 0;
+    if (pressed && was_released) {
+        BUS->stop_wake_requested = 1;
+    }
+
+    if (pressed) {
+        *register_value &= ~(1 << bit);
+    } else {
+        *register_value |= (1 << bit);
+    }
+
+    uint8_t new_value = bus_read_joypad(BUS) & 0x0F;
+
+    if (old_value & (uint8_t)~new_value & 0x0F) {
+        BUS->interrupt_flags |= 0x10;
+    }
 }
