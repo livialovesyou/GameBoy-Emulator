@@ -128,6 +128,7 @@ typedef struct PPU {
 
 
 void ppu_init(PPU *ppu);
+void ppu_boot(PPU *ppu, BUS *BUS);
 void ppu_decode_tile(PPU *ppu, uint16_t tile_address, uint8_t pixels[8][8]);
 void ppu_render_background(PPU *ppu, uint8_t pixels[SCREEN_HEIGHT][SCREEN_WIDTH]);
 uint8_t ppu_get_bg_color(PPU *ppu, uint8_t color_index);

@@ -664,6 +664,8 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
         case 0x6F:  //LD L, A // Loads A into L
             cpu->l = cpu->a;
+       //      printf("After LD L,A: A=%02X L=%02X F=%02X PC=%04X\n",
+       // cpu->a, cpu->l, cpu->f, cpu->pc);
             break;
 
         case 0x78: //LD A, B // Loads B into A
@@ -1053,6 +1055,13 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
                 cpu->pc = (uint16_t)(cpu->pc + offset);
                 cycle = 12;
+            }
+            if (cpu->pc == 0x7871 || cpu->pc == 0x7865)
+            {
+                printf("JR NZ result: PC=%04X F=%02X HL=%04X DE=%04X\n",
+                       cpu->pc, cpu->f,
+                       (cpu->h << 8) | cpu->l,
+                       (cpu->d << 8) | cpu->e);
             }
             break;
 
@@ -2058,7 +2067,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
             result_16 = a + d;
             cpu->a = (uint8_t)result_16;
-            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (d & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
@@ -2072,7 +2081,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
             result_16 = a + e;
             cpu->a = (uint8_t)result_16;
-            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (e & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
@@ -2086,7 +2095,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
             result_16 = a + h;
             cpu->a = (uint8_t)result_16;
-            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (h & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
@@ -2100,7 +2109,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
             result_16 = a + l;
             cpu->a = (uint8_t)result_16;
-            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (l & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
@@ -2114,7 +2123,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
             result_16 = a + value;
             cpu->a = (uint8_t)result_16;
-            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (value & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
@@ -2128,7 +2137,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
             result_16 = a + a;
             cpu->a = (uint8_t)result_16;
-            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (a & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);

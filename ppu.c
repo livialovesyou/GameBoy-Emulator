@@ -21,6 +21,22 @@ void ppu_init(PPU *ppu) {
     ppu->lcd_was_enabled = 0;
 }
 
+void ppu_boot(PPU *ppu, BUS *BUS) {
+    ppu->lcdc = 0x91;
+    ppu->stat = 0x80;
+    ppu->scy = 0x00;
+    ppu->scx = 0x00;
+    ppu->ly  = 0x00;
+    ppu->lyc = 0x00;
+    ppu->bgp = 0xFC;
+    ppu->obp0 = 0xFF;
+    ppu->obp1 = 0xFF;
+    ppu->wy = 0x00;
+    ppu->wx = 0x00;
+    BUS->interrupt_enable = 0x00;
+    BUS->interrupt_flags = 0x01;
+}
+
 void ppu_decode_tile(PPU *ppu, uint16_t tile_address, uint8_t pixels[8][8]) {
     uint16_t offset = tile_address - 0x8000;
 

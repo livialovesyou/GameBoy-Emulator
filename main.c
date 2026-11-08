@@ -28,13 +28,6 @@ int main(void) {
     TIMER timer;
     PPU ppu;
     uint8_t framebuffer[SCREEN_HEIGHT][SCREEN_WIDTH] = {0};
-    // Create a simple test pattern.
-    // for (int y = 0; y < SCREEN_HEIGHT; y++) {
-    //     for (int x = 0; x < SCREEN_WIDTH; x++) {
-    //         framebuffer[y][x] = (x / 40) % 4;
-    //     }
-    // }
-
 
     cpu_init(&cpu);
     ppu_init(&ppu);
@@ -47,11 +40,12 @@ int main(void) {
     printf("Internal DIV: %04X\n", timer.divider);
     printf("Bus DIV: %02X\n", bus_read_byte(&BUS, 0xFF04));
 
-    if (!rom_load("PKM_RED.gb", &BUS.rom, &BUS.rom_size))
+    if (!rom_load("TETRIS.gb", &BUS.rom, &BUS.rom_size))
     {
         display_destroy(&display);
         return 1;
     }
+    ppu_boot(&ppu, &BUS);
 
     printf("Loaded ROM: %zu bytes\n", BUS.rom_size);
     printf("Cartridge type: %02X\n", BUS.rom[0x147]);
@@ -62,33 +56,6 @@ int main(void) {
     BUS.mbc_type = BUS.rom[0x0147];
 
     printf("Cartridge type: %02X\n", BUS.mbc_type);
-
-    ppu.lcdc = 0x91;
-    ppu.stat = 0x80;
-    ppu.scy = 0x00;
-    ppu.scx = 0x00;
-    ppu.ly  = 0x00;
-    ppu.lyc = 0x00;
-    ppu.bgp = 0xFC;
-    ppu.obp0 = 0xFF;
-    ppu.obp1 = 0xFF;
-    ppu.wy = 0x00;
-    ppu.wx = 0x00;
-    BUS.interrupt_enable = 0x00;
-    BUS.interrupt_flags = 0x01;
-    // // Tile 0: alternating black and white vertical stripes.
-    // for (int row = 0; row < 8; row++)
-    // {
-    //     ppu.vram[row * 2] = 0xAA;
-    //     ppu.vram[row * 2 + 1] = 0xAA;
-    // }
-    //
-    // // Fill the background tile map with tile 0.
-    // for (int i = 0; i < 32 * 32; i++)
-    // {
-    //     ppu.vram[0x1800 + i] = 0;
-    // }
-
 
     //timings
     const double target_frame_time = 1.0 / 59.7;
