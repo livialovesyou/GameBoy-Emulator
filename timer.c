@@ -10,7 +10,11 @@
 #include "BUS.h"
 
 void timer_init(TIMER *timer) {
-    memset(timer, 0, sizeof(TIMER));
+    timer->divider = 0xAB00;
+    timer->tima = 0;
+    timer->tma = 0;
+    timer->tac = 0;
+    timer->overflow_delay = 0;
 }
 
 uint8_t timer_read_register(TIMER *timer, uint16_t address) {

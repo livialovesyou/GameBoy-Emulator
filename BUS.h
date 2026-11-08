@@ -7,6 +7,7 @@
 #define WRAM_SIZE 8192
 #define HRAM_SIZE 127
 #define ROM_SIZE 0x8000
+#define CART_RAM_SIZE 32768
 #include <stdint.h>
 #include "ppu.h"
 
@@ -24,7 +25,20 @@ typedef enum {
 } JoypadButton;
 
 typedef struct BUS {
-    uint8_t rom[ROM_SIZE];
+    uint8_t *rom;
+    size_t rom_size;
+
+
+    // Cartridge banking
+    uint8_t mbc_type;
+    // MBC3 banking
+    uint8_t mbc3_rom_bank;
+    uint8_t mbc3_ram_bank;
+    uint8_t mbc3_ram_enabled;
+    uint8_t mbc3_latch_value;
+    
+
+    uint8_t cart_ram[CART_RAM_SIZE];
     uint8_t wram[WRAM_SIZE];
     uint8_t hram[HRAM_SIZE];
     uint8_t interrupt_enable; // IE: 0xFFFF

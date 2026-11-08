@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include "bus.h"
 #include "test.h"
 #include "cpu.h"
@@ -39,12 +41,27 @@ int main(void) {
     timer_init(&timer);
     bus_init(&BUS, &ppu, &timer);
 
-    if (!rom_load("CATRAP.gb", BUS.rom))
+    uint8_t *rom_data = NULL;
+    size_t rom_size = 0;
+
+    printf("Internal DIV: %04X\n", timer.divider);
+    printf("Bus DIV: %02X\n", bus_read_byte(&BUS, 0xFF04));
+
+    if (!rom_load("PKM_RED.gb", &BUS.rom, &BUS.rom_size))
     {
+        display_destroy(&display);
         return 1;
     }
+
+    printf("Loaded ROM: %zu bytes\n", BUS.rom_size);
     printf("Cartridge type: %02X\n", BUS.rom[0x147]);
     printf("ROM size: %02X\n", BUS.rom[0x148]);
+
+    printf("MBC type: %02X\n", BUS.mbc_type);
+    //printf("Initial ROM bank: %u\n", BUS.rom_bank_low5);
+    BUS.mbc_type = BUS.rom[0x0147];
+
+    printf("Cartridge type: %02X\n", BUS.mbc_type);
 
     ppu.lcdc = 0x91;
     ppu.stat = 0x80;
@@ -141,5 +158,8 @@ int main(void) {
     display_destroy(&display);
 
     test_cpu();
+    free(BUS.rom);
+    BUS.rom = NULL;
+    free(rom_data);
     return 0;
 }

@@ -5501,6 +5501,10 @@ void test_cpu_stop_wakeup(void)
     ppu_init(&ppu);
     timer_init(&timer);
     bus_init(&BUS, &ppu, &timer);
+    BUS.rom_size = 0x8000;
+    BUS.rom = calloc(1, BUS.rom_size);
+
+    assert(BUS.rom != NULL);
 
     // STOP instruction followed by its padding byte.
     BUS.rom[0x0100] = 0x10;
@@ -5515,7 +5519,7 @@ void test_cpu_stop_wakeup(void)
     uint64_t old_cycles = cpu.cycles;
     cpu_step(&cpu, &BUS);
 
-    assert(cpu.cycles == old_cycles);
+    assert(cpu.cycles == old_cycles + 4);
     assert(cpu.stopped == 1);
 
     // Press A.
@@ -5527,6 +5531,7 @@ void test_cpu_stop_wakeup(void)
     assert(BUS.stop_wake_requested == 0);
 
     printf("test_cpu_stop_wakeup passed\n");
+    free(BUS.rom);
 }
 
 void test_ppu_window_disabled(void)
@@ -5548,6 +5553,84 @@ void test_ppu_window_disabled(void)
     printf("test_ppu_window_disabled passed\n");
 }
 
+void test_mbc3_rom_banking(void)
+{
+    BUS bus;
+    PPU ppu;
+    TIMER timer;
+
+    ppu_init(&ppu);
+    timer_init(&timer);
+    bus_init(&bus, &ppu, &timer);
+
+
+    bus.rom_size = 4 * 0x4000;
+    bus.rom = malloc(bus.rom_size);
+
+    assert(bus.rom != NULL);
+
+    bus.mbc_type = 0x13;
+    bus.mbc3_rom_bank = 1;
+
+    // Give each bank a recognizable value.
+    for (int bank = 0; bank < 4; bank++)
+    {
+        memset(
+            &bus.rom[bank * 0x4000],
+            bank,
+            0x4000
+        );
+    }
+
+    assert(bus_read_byte(&bus, 0x0000) == 0);
+    assert(bus_read_byte(&bus, 0x4000) == 1);
+
+    bus_write_byte(&bus, 0x2000, 2);
+    assert(bus_read_byte(&bus, 0x4000) == 2);
+
+    bus_write_byte(&bus, 0x2000, 3);
+    assert(bus_read_byte(&bus, 0x4000) == 3);
+
+    // Bank zero is remapped to bank one.
+    bus_write_byte(&bus, 0x2000, 0);
+    assert(bus_read_byte(&bus, 0x4000) == 1);
+
+    free(bus.rom);
+
+    printf("test_mbc3_rom_banking passed\n");
+}
+
+void test_mbc3_ram_banking(void)
+{
+    BUS bus = {0};
+    bus.mbc_type = 0x13;
+    bus.mbc3_ram_bank = 0;
+    bus.mbc3_ram_enabled = 0;
+
+    // RAM should be inaccessible until enabled.
+    bus_write_byte(&bus, 0xA000, 0x42);
+    assert(bus_read_byte(&bus, 0xA000) == 0xFF);
+
+    // Enable RAM.
+    bus_write_byte(&bus, 0x0000, 0x0A);
+    assert(bus.mbc3_ram_enabled == 1);
+
+    // Write and read bank 0.
+    bus_write_byte(&bus, 0xA000, 0x42);
+    assert(bus_read_byte(&bus, 0xA000) == 0x42);
+
+    // Switch to bank 1.
+    bus_write_byte(&bus, 0x4000, 0x01);
+    bus_write_byte(&bus, 0xA000, 0x99);
+    assert(bus_read_byte(&bus, 0xA000) == 0x99);
+
+    // Bank 0 must retain its original value.
+    bus_write_byte(&bus, 0x4000, 0x00);
+    assert(bus_read_byte(&bus, 0xA000) == 0x42);
+
+    printf("test_mbc3_ram_banking passed\n");
+}
+
 void test_cpu(void) {
     test_cpu_registers_1();
     test_cpu_flags_1();
@@ -5562,6 +5645,9 @@ void test_cpu(void) {
     test_cpu_opcodes_9();
     test_cpu_interrupts();
     test_cpu_stop_wakeup();
+    test_mbc3_rom_banking();
+    test_mbc3_ram_banking();
+
 }
 
 void test_ppu(void) {

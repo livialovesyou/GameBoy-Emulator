@@ -270,6 +270,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_fetch_byte(cpu, BUS);
             timer_write_register(BUS->timer, 0xFF04, 0);
             cpu->stopped = 1;
+            cpu->cycles += 4;
             break;
         }
 

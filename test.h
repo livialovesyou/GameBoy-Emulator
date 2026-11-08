@@ -98,6 +98,8 @@ void test_cpu_halt_wakeup_ime_disabled(void);
 void test_cpu_halt_bug_execution(void);
 
 void test_cpu_stop_wakeup(void);
+void test_mbc3_rom_banking(void);
+void test_mbc3_ram_banking(void);
 
 
 
