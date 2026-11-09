@@ -10,6 +10,7 @@
 #include "timer.h"
 #include "display.h"
 #include "rom.h"
+#include "save.h"
 
 #define GB_FRAME_TIME_MS 16.74
 
@@ -40,7 +41,7 @@ int main(void) {
     printf("Internal DIV: %04X\n", timer.divider);
     printf("Bus DIV: %02X\n", bus_read_byte(&BUS, 0xFF04));
 
-    if (!rom_load("TETRIS.gb", &BUS.rom, &BUS.rom_size))
+    if (!rom_load("KIRBY.gb", &BUS.rom, &BUS.rom_size))
     {
         display_destroy(&display);
         return 1;
@@ -50,10 +51,19 @@ int main(void) {
     printf("Loaded ROM: %zu bytes\n", BUS.rom_size);
     printf("Cartridge type: %02X\n", BUS.rom[0x147]);
     printf("ROM size: %02X\n", BUS.rom[0x148]);
-
+    printf("RAM size code: %02X\n", BUS.rom[0x149]);
     printf("MBC type: %02X\n", BUS.mbc_type);
+
+
     //printf("Initial ROM bank: %u\n", BUS.rom_bank_low5);
     BUS.mbc_type = BUS.rom[0x0147];
+    if (BUS.mbc_type == 0x13)
+    {
+        if (save_load(&BUS, "PKM_RED.sav"))
+            printf("Save file loaded.\n");
+        else
+            printf("No existing save file found.\n");
+    }
 
     printf("Cartridge type: %02X\n", BUS.mbc_type);
 
@@ -64,7 +74,8 @@ int main(void) {
     uint64_t frame_start = SDL_GetPerformanceCounter();
     uint64_t fps_timer = SDL_GetPerformanceCounter();
 
-
+    uint64_t cycle_count = 0;
+    uint64_t frame_cycles = 0;
 
     printf("ROM entry: %02X %02X %02X %02X\n",
        BUS.rom[0x100],
@@ -76,14 +87,14 @@ int main(void) {
     int running = 1;
     while (running) {
 
-
         //Update PPU after every instruction
          uint64_t old_cycles = cpu.cycles;
          cpu_step(&cpu, &BUS);
 
          uint64_t elapsed = cpu.cycles - old_cycles;
         //printf("PC: %04X\n", cpu.pc);
-
+        cycle_count += elapsed;
+        frame_cycles += elapsed;
 
         bus_update_dma(&BUS, elapsed);
         ppu_update(&ppu, &BUS, elapsed, framebuffer);
@@ -95,20 +106,22 @@ int main(void) {
             ppu.frame_ready = 0;
 
             display_render(&display, framebuffer);
-
+            //printf("Frame cycles: %llu\n",(unsigned long long)frame_cycles);
+            frame_cycles = 0;
 
             fps_frame_count++;
+
             uint64_t now = SDL_GetPerformanceCounter();
             double elapsed_seconds1 = (double)(now - fps_timer) / frequency;
             if (elapsed_seconds1 >= 1.0)
             {
-                //printf("FPS: %.2f\n", fps_frame_count / elapsed_seconds1);
+                printf("FPS: %.2f\n", fps_frame_count / elapsed_seconds1);
+                //printf("CPU cycles/sec: %llu\n",(unsigned long long)(cycle_count / elapsed_seconds1));
+                cycle_count = 0;
 
                 fps_frame_count = 0;
                 fps_timer = now;
             }
-
-
 
             uint64_t frame_end = SDL_GetPerformanceCounter();
             double elapsed_seconds =
@@ -124,9 +137,21 @@ int main(void) {
 
     display_destroy(&display);
 
-    test_cpu();
+
+
+    if (BUS.mbc_type == 0x13)
+    {
+        if (save_write(&BUS, "PKM_RED.sav"))
+            printf("Game saved.\n");
+        else
+            printf("Failed to save game.\n");
+    }
     free(BUS.rom);
     BUS.rom = NULL;
     free(rom_data);
+    test_cpu();
+    test_ppu();
+    test_timer();
+
     return 0;
 }

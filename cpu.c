@@ -270,7 +270,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_fetch_byte(cpu, BUS);
             timer_write_register(BUS->timer, 0xFF04, 0);
             cpu->stopped = 1;
-            cpu->cycles += 4;
+            //cpu->cycles += 4;
             break;
         }
 
@@ -1055,13 +1055,6 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
                 cpu->pc = (uint16_t)(cpu->pc + offset);
                 cycle = 12;
-            }
-            if (cpu->pc == 0x7871 || cpu->pc == 0x7865)
-            {
-                printf("JR NZ result: PC=%04X F=%02X HL=%04X DE=%04X\n",
-                       cpu->pc, cpu->f,
-                       (cpu->h << 8) | cpu->l,
-                       (cpu->d << 8) | cpu->e);
             }
             break;
 

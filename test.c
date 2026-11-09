@@ -4244,6 +4244,7 @@ void test_dma_loop_integration(void)
 void test_timer_div(void) {
     TIMER timer;
     timer_init(&timer);
+    timer.divider = 0;
 
     uint8_t interrupt_flags = 0;
 
@@ -4276,6 +4277,7 @@ void test_timer_frequency(void) {
     for (int frequency = 0; frequency < 4; frequency++) {
         timer_init(&timer);
         interrupt_flags = 0;
+        timer.divider = 0;
 
         // Enable timer and select frequency.
         timer_write_register(&timer, 0xFF07,
@@ -4476,6 +4478,7 @@ void test_timer_registers(void) {
 
     timer_init(&timer);
     BUS.timer = &timer;
+    timer.divider = 0;
 
     // Write and read TIMA.
     bus_write_byte(&BUS, 0xFF05, 0xAB);
@@ -5602,7 +5605,10 @@ void test_mbc3_rom_banking(void)
 
 void test_mbc3_ram_banking(void)
 {
-    BUS bus = {0};
+    BUS bus;
+    PPU ppu;
+    TIMER timer;
+    bus_init(&bus,&ppu,&timer);
     bus.mbc_type = 0x13;
     bus.mbc3_ram_bank = 0;
     bus.mbc3_ram_enabled = 0;

@@ -1115,11 +1115,11 @@ void ppu_start_drawing(PPU *ppu) {
 );
     ppu_sort_sprites(ppu->selected_sprites, ppu->sprite_count);
 
-    if (ppu->lcdc & 0x02) {
-        for (int i = 0; i < ppu->sprite_count; i++) {
-            ppu_fetch_sprite(ppu, &ppu->selected_sprites[i]);
-        }
-    }
+    // if (ppu->lcdc & 0x02) {
+    //     for (int i = 0; i < ppu->sprite_count; i++) {
+    //         ppu_fetch_sprite(ppu, &ppu->selected_sprites[i]);
+    //     }
+    // }
     ppu->window_fetch_delay = 0;
     ppu->sprite_fetch_active = 0;
     ppu->sprite_fetch_delay = 0;
@@ -1127,7 +1127,7 @@ void ppu_start_drawing(PPU *ppu) {
     ppu->window_used_this_line = 0;
     ppu->fetcher_step = 0;
     ppu->fetcher_cycle = 0;
-    ppu->fetcher_x = ppu->scx >> 3;
+    ppu->fetcher_x = 0;
 
     ppu->output_x = 0;
     ppu->discard_pixels = ppu->scx & 7;
@@ -1269,7 +1269,7 @@ void ppu_sprite_fetch_update(PPU *ppu) {
 
     Sprite *sprite = &ppu->selected_sprites[ppu->sprite_fetch_index];
     int sprite_screen_x = sprite->x - 8;
-    int trigger_x = sprite_screen_x + (ppu->scx & 7);
+    int trigger_x =  sprite_screen_x;
 
     if ((int)ppu->output_x >= trigger_x) {
         ppu->sprite_fetch_active = 1;

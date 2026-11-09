@@ -25,33 +25,63 @@ void bus_init(BUS *BUS, PPU *ppu, TIMER *timer)
     BUS->mbc3_ram_bank = 0;
     BUS->mbc3_ram_enabled = 0;
     BUS->mbc3_latch_value = 0;
+
+    BUS->mbc1_rom_bank_low5 = 1;
+    BUS->mbc1_bank_high2 = 0;
+    BUS->mbc1_banking_mode = 0;
+    BUS->mbc1_ram_enabled = 0;
 }
 
 
 static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
 
-    // Cartridge ROM: 0x0000–0x7FFF
+    // Cartridge ROM: 0x0000–0x3FFF
     if (address <= 0x3FFF)
     {
-        if (BUS->rom == NULL || address >= BUS->rom_size)
+        if (BUS->rom == NULL)
             return 0xFF;
-        return BUS->rom[address];
+
+        uint32_t bank = 0;
+
+        if (BUS->mbc_type >= 0x01 && BUS->mbc_type <= 0x03 &&
+            BUS->mbc1_banking_mode == 1)
+        {
+            bank = (uint32_t)BUS->mbc1_bank_high2 << 5;
+        }
+
+        uint32_t rom_address = bank * 0x4000 + address;
+
+        if (rom_address >= BUS->rom_size)
+            return 0xFF;
+
+        return BUS->rom[rom_address];
     }
 
+    // Cartridge ROM: 0x4000–0x7FFF
     if (address <= 0x7FFF)
     {
         if (BUS->rom == NULL)
             return 0xFF;
 
         uint32_t bank = 1;
-        if (BUS->mbc_type >= 0x0F && BUS->mbc_type <= 0x13)
+
+        if (BUS->mbc_type >= 0x01 && BUS->mbc_type <= 0x03)
+        {
+            bank = ((uint32_t)BUS->mbc1_bank_high2 << 5) |
+                   BUS->mbc1_rom_bank_low5;
+        }
+        else if (BUS->mbc_type >= 0x0F &&
+                 BUS->mbc_type <= 0x13)
         {
             bank = BUS->mbc3_rom_bank;
         }
 
         uint32_t rom_address = bank * 0x4000 + (address - 0x4000);
+
+
         if (rom_address >= BUS->rom_size)
             return 0xFF;
+
         return BUS->rom[rom_address];
     }
 
@@ -59,11 +89,33 @@ static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
     // Cartridge external RAM: 0xA000–0xBFFF
     if (address >= 0xA000 && address <= 0xBFFF)
     {
-        if (!BUS->mbc3_ram_enabled || BUS->mbc3_ram_bank > 3)
-            return 0xFF;
+        uint32_t ram_address = address - 0xA000;
 
-        uint32_t ram_address =
-            BUS->mbc3_ram_bank * 0x2000 + (address - 0xA000);
+        // MBC1
+        if (BUS->mbc_type >= 0x01 && BUS->mbc_type <= 0x03)
+        {
+            if (!BUS->mbc1_ram_enabled)
+                return 0xFF;
+
+            if (BUS->mbc1_banking_mode == 1)
+                ram_address += BUS->mbc1_bank_high2 * 0x2000;
+        }
+        // MBC3
+        else if (BUS->mbc_type >= 0x0F && BUS->mbc_type <= 0x13)
+        {
+            if (!BUS->mbc3_ram_enabled || BUS->mbc3_ram_bank > 3)
+                return 0xFF;
+
+            ram_address += BUS->mbc3_ram_bank * 0x2000;
+        }
+        else
+        {
+            return 0xFF;
+        }
+
+        // // This cartridge has 8 KB of RAM.
+        // if (ram_address >= 0x2000)
+        //     return 0xFF;
 
         return BUS->cart_ram[ram_address];
     }
@@ -180,14 +232,46 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
     // Cartridge banking registers
     if (address <= 0x7FFF)
     {
-        if (BUS->mbc_type >= 0x0F && BUS->mbc_type <= 0x13)
+        // MBC1
+        if (BUS->mbc_type == 0x01 ||
+            BUS->mbc_type == 0x02 ||
+            BUS->mbc_type == 0x03)
         {
-            // RAM enable: 0x0000–0x1FFF
+            if (address <= 0x1FFF)
+            {
+                // RAM enable
+                BUS->mbc1_ram_enabled = ((value & 0x0F) == 0x0A);
+            }
+            else if (address <= 0x3FFF)
+            {
+                // ROM bank number (lower 5 bits)
+                BUS->mbc1_rom_bank_low5 = value & 0x1F;
+
+                if (BUS->mbc1_rom_bank_low5 == 0)
+                    BUS->mbc1_rom_bank_low5 = 1;
+
+            }
+            else if (address <= 0x5FFF)
+            {
+                // Upper 2 bank bits
+                BUS->mbc1_bank_high2 = value & 0x03;
+                printf("MBC1 high bank bits: %02X\n",
+                    BUS->mbc1_bank_high2);
+            }
+            else
+            {
+                // Banking mode
+                BUS->mbc1_banking_mode = value & 0x01;
+            }
+        }
+        // MBC3
+        else if (BUS->mbc_type >= 0x0F &&
+                 BUS->mbc_type <= 0x13)
+        {
             if (address <= 0x1FFF)
             {
                 BUS->mbc3_ram_enabled = ((value & 0x0F) == 0x0A);
             }
-            // ROM bank select: 0x2000–0x3FFF
             else if (address <= 0x3FFF)
             {
                 BUS->mbc3_rom_bank = value & 0x7F;
@@ -195,7 +279,6 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
                 if (BUS->mbc3_rom_bank == 0)
                     BUS->mbc3_rom_bank = 1;
             }
-            // RAM bank select: 0x4000–0x5FFF
             else if (address <= 0x5FFF)
             {
                 if (value <= 3)
@@ -203,7 +286,7 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
                 else
                     BUS->mbc3_ram_bank = 0xFF;
             }
-            // 0x6000–0x7FFF: RTC latch (not used by this cartridge)
+            // RTC latch at 0x6000–0x7FFF is not implemented
         }
 
         return;
@@ -212,13 +295,32 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
     // Cartridge external RAM: 0xA000–0xBFFF
     if (address >= 0xA000 && address <= 0xBFFF)
     {
-        if (BUS->mbc3_ram_enabled && BUS->mbc3_ram_bank <= 3)
-        {
-            uint32_t ram_address =
-                BUS->mbc3_ram_bank * 0x2000 + (address - 0xA000);
+        uint32_t ram_address = address - 0xA000;
 
-            BUS->cart_ram[ram_address] = value;
+        // MBC1
+        if (BUS->mbc_type >= 0x01 && BUS->mbc_type <= 0x03)
+        {
+            if (!BUS->mbc1_ram_enabled)
+                return;
+
+            if (BUS->mbc1_banking_mode == 1)
+                ram_address += BUS->mbc1_bank_high2 * 0x2000;
         }
+        // MBC3
+        else if (BUS->mbc_type >= 0x0F && BUS->mbc_type <= 0x13)
+        {
+            if (!BUS->mbc3_ram_enabled || BUS->mbc3_ram_bank > 3)
+                return;
+
+            ram_address += BUS->mbc3_ram_bank * 0x2000;
+        }
+        else
+        {
+            return;
+        }
+
+        if (ram_address < CART_RAM_SIZE)
+            BUS->cart_ram[ram_address] = value;
 
         return;
     }

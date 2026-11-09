@@ -36,7 +36,11 @@ typedef struct BUS {
     uint8_t mbc3_ram_bank;
     uint8_t mbc3_ram_enabled;
     uint8_t mbc3_latch_value;
-    
+
+    uint8_t mbc1_rom_bank_low5;
+    uint8_t mbc1_bank_high2;
+    uint8_t mbc1_banking_mode;
+    uint8_t mbc1_ram_enabled;
 
     uint8_t cart_ram[CART_RAM_SIZE];
     uint8_t wram[WRAM_SIZE];
