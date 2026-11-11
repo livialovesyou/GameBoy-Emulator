@@ -49,8 +49,11 @@ static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
             bank = (uint32_t)BUS->mbc1_bank_high2 << 5;
         }
 
-        uint32_t rom_address = bank * 0x4000 + address;
+        // Mirror bank number to the actual ROM size.
+        uint32_t bank_count = (uint32_t)(BUS->rom_size / 0x4000);
+        bank &= (bank_count - 1);
 
+        uint32_t rom_address = bank * 0x4000 + address;
         if (rom_address >= BUS->rom_size)
             return 0xFF;
 
@@ -63,12 +66,21 @@ static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
         if (BUS->rom == NULL)
             return 0xFF;
 
+
+
         uint32_t bank = 1;
 
         if (BUS->mbc_type >= 0x01 && BUS->mbc_type <= 0x03)
         {
             bank = ((uint32_t)BUS->mbc1_bank_high2 << 5) |
                    BUS->mbc1_rom_bank_low5;
+
+            // if (bank != BUS->debug_last_rom_bank) {
+            //     printf("MBC1 ROM bank changed: %02X (address %04X)\n",
+            //            bank, address);
+            //
+            //     BUS->debug_last_rom_bank = bank;
+            // }
         }
         else if (BUS->mbc_type >= 0x0F &&
                  BUS->mbc_type <= 0x13)
@@ -76,9 +88,20 @@ static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
             bank = BUS->mbc3_rom_bank;
         }
 
+        uint32_t bank_count = BUS->rom_size / 0x4000;
+        bank &= (bank_count - 1);
+
+
+        // Temporary debug output
+        // static uint32_t last_bank = 0xFFFFFFFF;
+        // if (bank != last_bank) {
+        //     printf("ROM read bank: %02X, address: %04X\n",
+        //            (unsigned)bank, address);
+        //     last_bank = bank;
+        // }
+
+
         uint32_t rom_address = bank * 0x4000 + (address - 0x4000);
-
-
         if (rom_address >= BUS->rom_size)
             return 0xFF;
 
@@ -97,8 +120,8 @@ static uint8_t bus_read_byte_internal(BUS *BUS, uint16_t address) {
             if (!BUS->mbc1_ram_enabled)
                 return 0xFF;
 
-            if (BUS->mbc1_banking_mode == 1)
-                ram_address += BUS->mbc1_bank_high2 * 0x2000;
+            // if (BUS->mbc1_banking_mode == 1)
+            //     ram_address += BUS->mbc1_bank_high2 * 0x2000;
         }
         // MBC3
         else if (BUS->mbc_type >= 0x0F && BUS->mbc_type <= 0x13)
@@ -249,19 +272,22 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
 
                 if (BUS->mbc1_rom_bank_low5 == 0)
                     BUS->mbc1_rom_bank_low5 = 1;
+                //printf("MBC1 ROM bank: %02X -> %02X\n",BUS->mbc1_rom_bank_low5, value & 0x1F);
 
             }
             else if (address <= 0x5FFF)
             {
                 // Upper 2 bank bits
                 BUS->mbc1_bank_high2 = value & 0x03;
-                printf("MBC1 high bank bits: %02X\n",
-                    BUS->mbc1_bank_high2);
+                printf("MBC1 upper bank: %02X -> %02X\n",
+       BUS->mbc1_bank_high2, value & 0x03);
             }
             else
             {
                 // Banking mode
                 BUS->mbc1_banking_mode = value & 0x01;
+                printf("MBC1 mode: %02X -> %02X\n",
+       BUS->mbc1_banking_mode, value & 0x01);
             }
         }
         // MBC3

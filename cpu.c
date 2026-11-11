@@ -270,7 +270,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
             cpu_fetch_byte(cpu, BUS);
             timer_write_register(BUS->timer, 0xFF04, 0);
             cpu->stopped = 1;
-            //cpu->cycles += 4;
+            cpu->cycles += 4;
             break;
         }
 
@@ -1055,7 +1055,11 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
                 cpu->pc = (uint16_t)(cpu->pc + offset);
                 cycle = 12;
+
             }
+
+
+
             break;
 
         case 0x28: //JR Z,d8 // Conditional relative jump if ZERO FLAG is set
@@ -2553,7 +2557,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
             result_16 = a + value;
             cpu->a = (uint8_t)result_16;
-            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (value & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);

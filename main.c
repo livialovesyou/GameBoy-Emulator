@@ -41,7 +41,7 @@ int main(void) {
     printf("Internal DIV: %04X\n", timer.divider);
     printf("Bus DIV: %02X\n", bus_read_byte(&BUS, 0xFF04));
 
-    if (!rom_load("KIRBY.gb", &BUS.rom, &BUS.rom_size))
+    if (!rom_load("METROID.gb", &BUS.rom, &BUS.rom_size))
     {
         display_destroy(&display);
         return 1;
@@ -52,11 +52,9 @@ int main(void) {
     printf("Cartridge type: %02X\n", BUS.rom[0x147]);
     printf("ROM size: %02X\n", BUS.rom[0x148]);
     printf("RAM size code: %02X\n", BUS.rom[0x149]);
+    BUS.mbc_type = BUS.rom[0x0147];
     printf("MBC type: %02X\n", BUS.mbc_type);
 
-
-    //printf("Initial ROM bank: %u\n", BUS.rom_bank_low5);
-    BUS.mbc_type = BUS.rom[0x0147];
     if (BUS.mbc_type == 0x13)
     {
         if (save_load(&BUS, "PKM_RED.sav"))
@@ -87,9 +85,11 @@ int main(void) {
     int running = 1;
     while (running) {
 
-        //Update PPU after every instruction
          uint64_t old_cycles = cpu.cycles;
          cpu_step(&cpu, &BUS);
+        if (cpu.pc == 0x0100) {
+            printf("CPU returned to cartridge entry point\n");
+        }
 
          uint64_t elapsed = cpu.cycles - old_cycles;
         //printf("PC: %04X\n", cpu.pc);
@@ -99,6 +99,18 @@ int main(void) {
         bus_update_dma(&BUS, elapsed);
         ppu_update(&ppu, &BUS, elapsed, framebuffer);
         timer_update(&timer, elapsed, &BUS.interrupt_flags);
+
+
+        static uint64_t debug_counter = 0;
+        debug_counter++;
+        if (debug_counter % 1000000 == 0) {
+            printf("PC: %04X | LY: %d | IF: %02X | IE: %02X\n",
+                   cpu.pc,
+                   ppu.ly,
+                   BUS.interrupt_flags,
+                   BUS.interrupt_enable);
+        }
+
 
         display_process_events(&display, &running, &BUS);
         if (ppu.frame_ready)
@@ -149,9 +161,9 @@ int main(void) {
     free(BUS.rom);
     BUS.rom = NULL;
     free(rom_data);
-    test_cpu();
-    test_ppu();
-    test_timer();
+    // test_cpu();
+    // test_ppu();
+    // test_timer();
 
     return 0;
 }

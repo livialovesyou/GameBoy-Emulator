@@ -1142,6 +1142,9 @@ void ppu_check_window_start(PPU *ppu) {
     if (ppu->window_active)
         return;
 
+    if (ppu->discard_pixels > 0)
+        return;
+
     int window_screen_x = (int)ppu->wx - 7;
 
     if ((int)ppu->output_x < window_screen_x)

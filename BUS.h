@@ -66,6 +66,8 @@ typedef struct BUS {
     uint8_t joypad_buttons;
     uint8_t joypad_directions;
     uint8_t stop_wake_requested;
+
+    uint8_t debug_last_rom_bank;
 } BUS;
 
 void bus_init(BUS *BUS, PPU *ppu, TIMER *timer);
