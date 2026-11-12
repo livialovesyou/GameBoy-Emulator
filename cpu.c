@@ -261,6 +261,9 @@ void cpu_step(CPU *cpu, BUS *BUS) {
         cpu->pc++;
     }
 
+
+
+
     switch (opcode) {
         case 0x00: // NOP
             break;
@@ -847,7 +850,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
             uint16_t result_16 = a + b;
             cpu->a = (uint8_t)result_16;
-            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (b & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
@@ -859,7 +862,7 @@ void cpu_step(CPU *cpu, BUS *BUS) {
 
             result_16 = a + c;
             cpu->a = (uint8_t)result_16;
-            cpu_set_flag(cpu, FLAG_Z, result_16 == 0);
+            cpu_set_flag(cpu, FLAG_Z, cpu->a == 0);
             cpu_set_flag(cpu, FLAG_N, 0);
             cpu_set_flag(cpu, FLAG_H, ((a & 0x0F) + (c & 0x0F)) > 0x0F);
             cpu_set_flag(cpu, FLAG_C, result_16 > 0xFF);
@@ -1057,9 +1060,6 @@ void cpu_step(CPU *cpu, BUS *BUS) {
                 cycle = 12;
 
             }
-
-
-
             break;
 
         case 0x28: //JR Z,d8 // Conditional relative jump if ZERO FLAG is set

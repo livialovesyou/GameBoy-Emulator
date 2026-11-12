@@ -41,7 +41,7 @@ int main(void) {
     printf("Internal DIV: %04X\n", timer.divider);
     printf("Bus DIV: %02X\n", bus_read_byte(&BUS, 0xFF04));
 
-    if (!rom_load("METROID.gb", &BUS.rom, &BUS.rom_size))
+    if (!rom_load("PKM_RED.gb", &BUS.rom, &BUS.rom_size))
     {
         display_destroy(&display);
         return 1;
@@ -65,12 +65,7 @@ int main(void) {
 
     printf("Cartridge type: %02X\n", BUS.mbc_type);
 
-    //timings
-    const double target_frame_time = 1.0 / 59.7;
-    uint32_t fps_frame_count = 0;
-    uint64_t frequency = SDL_GetPerformanceFrequency();
-    uint64_t frame_start = SDL_GetPerformanceCounter();
-    uint64_t fps_timer = SDL_GetPerformanceCounter();
+
 
     uint64_t cycle_count = 0;
     uint64_t frame_cycles = 0;
@@ -81,69 +76,35 @@ int main(void) {
        BUS.rom[0x102],
        BUS.rom[0x103]);
 
-    //MAIN LOOP
+    // Timing
+    const uint64_t frequency = SDL_GetPerformanceFrequency();
+    const double target_fps = 59.7275;
+    const uint64_t frame_ticks =
+        (uint64_t)((double)frequency / target_fps);
+
+    uint64_t next_frame_time = SDL_GetPerformanceCounter();
+
+    // Main loop
     int running = 1;
-    while (running) {
 
-         uint64_t old_cycles = cpu.cycles;
-         cpu_step(&cpu, &BUS);
-        if (cpu.pc == 0x0100) {
-            printf("CPU returned to cartridge entry point\n");
-        }
+    while (running)
+    {
+        uint64_t old_cycles = cpu.cycles;
 
-         uint64_t elapsed = cpu.cycles - old_cycles;
-        //printf("PC: %04X\n", cpu.pc);
-        cycle_count += elapsed;
-        frame_cycles += elapsed;
+        cpu_step(&cpu, &BUS);
+
+        uint64_t elapsed = cpu.cycles - old_cycles;
 
         bus_update_dma(&BUS, elapsed);
         ppu_update(&ppu, &BUS, elapsed, framebuffer);
         timer_update(&timer, elapsed, &BUS.interrupt_flags);
 
-
-        static uint64_t debug_counter = 0;
-        debug_counter++;
-        if (debug_counter % 1000000 == 0) {
-            printf("PC: %04X | LY: %d | IF: %02X | IE: %02X\n",
-                   cpu.pc,
-                   ppu.ly,
-                   BUS.interrupt_flags,
-                   BUS.interrupt_enable);
-        }
-
-
         display_process_events(&display, &running, &BUS);
+
         if (ppu.frame_ready)
         {
             ppu.frame_ready = 0;
-
             display_render(&display, framebuffer);
-            //printf("Frame cycles: %llu\n",(unsigned long long)frame_cycles);
-            frame_cycles = 0;
-
-            fps_frame_count++;
-
-            uint64_t now = SDL_GetPerformanceCounter();
-            double elapsed_seconds1 = (double)(now - fps_timer) / frequency;
-            if (elapsed_seconds1 >= 1.0)
-            {
-                printf("FPS: %.2f\n", fps_frame_count / elapsed_seconds1);
-                //printf("CPU cycles/sec: %llu\n",(unsigned long long)(cycle_count / elapsed_seconds1));
-                cycle_count = 0;
-
-                fps_frame_count = 0;
-                fps_timer = now;
-            }
-
-            uint64_t frame_end = SDL_GetPerformanceCounter();
-            double elapsed_seconds =
-                (double)(frame_end - frame_start) / frequency;
-            if (elapsed_seconds < target_frame_time)
-            {
-                double remaining_seconds = target_frame_time - elapsed_seconds;
-                SDL_Delay((Uint32)(remaining_seconds * 1000.0));
-            }
-            frame_start = SDL_GetPerformanceCounter();
         }
     }
 

@@ -423,6 +423,7 @@ void bus_write_byte(BUS *BUS, uint16_t address, uint8_t value) {
         return;
     }
 
+    //Echo ram
     if (address >= 0xE000 && address <= 0xFDFF) {
         address -= 0x2000;
         return;
